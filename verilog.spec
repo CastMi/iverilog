@@ -86,6 +86,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(-,root,root) %{_libdir}/ivl%{suff}/vhdl.tgt
 %attr(-,root,root) %{_libdir}/ivl%{suff}/vhdl.conf
 %attr(-,root,root) %{_libdir}/ivl%{suff}/vhdl-s.conf
+%attr(-,root,root) %{_libdir}/ivl%{suff}/cpp.tgt
+%attr(-,root,root) %{_libdir}/ivl%{suff}/cpp.conf
+%attr(-,root,root) %{_libdir}/ivl%{suff}/cpp-s.conf
 %attr(-,root,root) %{_libdir}/ivl%{suff}/vlog95.tgt
 %attr(-,root,root) %{_libdir}/ivl%{suff}/vlog95.conf
 %attr(-,root,root) %{_libdir}/ivl%{suff}/vlog95-s.conf
