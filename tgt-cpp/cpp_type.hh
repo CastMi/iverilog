@@ -26,10 +26,14 @@
 
 enum cpp_type_name_t {
    CPP_TYPE_INT,
-   CPP_TYPE_VECTOR,
-   CPP_TYPE_SHARED_PTR,
+   CPP_TYPE_STD_STRING,
    CPP_TYPE_WARPED_EVENT,
-   CPP_TYPE_CUSTOM
+   CPP_TYPE_CUSTOM,
+   CPP_TYPE_NOTYPE,
+   // templates
+   CPP_TYPE_STD_PAIR,
+   CPP_TYPE_SHARED_PTR,
+   CPP_TYPE_STD_VECTOR
 };
 
 /*
@@ -41,8 +45,11 @@ class cpp_type : public cpp_element {
 public:
    // Scalar constructors
    cpp_type(cpp_type_name_t name, cpp_type *base = NULL, bool constant = false)
-      : name_(name), base_(base), isconst(constant) {}
-   
+      : name_(name), isconst(constant)
+   {
+      if(base != NULL)
+         base_.push_back(base);
+   }
    virtual ~cpp_type();
 
    void emit(std::ostream &of, int level) const;
@@ -52,12 +59,13 @@ public:
    std::string get_type_decl_string() const;
    void set_const() { isconst = true; }
    bool get_const() const { return isconst; }
+   void add_type(cpp_type* el) { base_.push_front(el); }
 
 protected:
    cpp_type_name_t name_;
-   // the following field has a meaningful value if and only if
-   // the "name_" field has a value of a container.
-   cpp_type *base_;
+   // the following field should be not empty if and only if the
+   // "name_" field has a value of a template.
+   std::list<cpp_type*> base_;
    bool isconst;
 };
 

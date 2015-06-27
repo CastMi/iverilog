@@ -140,9 +140,21 @@ void cpp_assign_stmt::emit(std::ostream &of, int level) const
    //this->after_->emit(of, level);
 }
 
+cppClass::cppClass(const string& name)
+      : name_(name)
+{
+   add_event_function();
+   // Every module has outputs.
+   cpp_type* temp = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_STD_STRING));
+   temp->add_type(new cpp_type(CPP_TYPE_STD_STRING));
+   cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_VECTOR,
+            new cpp_type(CPP_TYPE_STD_PAIR, temp)));
+   add_var(inputvar);
+}
+
 void cppClass::add_event_function()
 {
-   cpp_type *returnType = new cpp_type(CPP_TYPE_VECTOR,
+   cpp_type *returnType = new cpp_type(CPP_TYPE_STD_VECTOR,
          new cpp_type(CPP_TYPE_SHARED_PTR,
          new cpp_type(CPP_TYPE_WARPED_EVENT)));
    cpp_function *functionOne = new cpp_function("createInitialEvents", returnType);

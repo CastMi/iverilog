@@ -300,12 +300,7 @@ protected:
  */
 class cppClass : public cpp_element {
 public:
-   cppClass(const string& name)
-      : name_(name)
-   {
-      add_event_function();
-   }
-   
+   cppClass(const string& name);
    virtual ~cppClass() {};
 
    void emit(std::ostream &of, int level = 0) const;
