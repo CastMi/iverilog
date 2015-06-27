@@ -43,6 +43,8 @@ std::string cpp_type::get_string() const
           return std::string("int ");
       default:
           error("Unhandled type");
+          // the following return fix a compiler warning
+          return "";
     }
 }
 

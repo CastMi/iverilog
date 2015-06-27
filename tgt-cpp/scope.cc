@@ -432,7 +432,8 @@ static void create_skeleton_class_for(ivl_scope_t scope)
       // FIXME: here there should be a switch based on
       // parameter type.
       // Right now, everything is an int
-      theClass->addParam(cpp_param(ivl_parameter_basename(param),
+      cpp_function* constructor = theClass->get_costructor();
+      constructor->add_param(new cpp_var(ivl_parameter_basename(param),
               new cpp_type(CPP_TYPE_INT)));
    }
 

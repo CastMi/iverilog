@@ -185,7 +185,6 @@ public:
    assign_type_t assignment_type() const { return ASSIGN_NONBLOCK; }
 };
 
-
 /*
  * A parameter of a module.
  * It becomes a parameter of the constructor of the class.
@@ -304,26 +303,23 @@ public:
    cppClass(const string& name)
       : name_(name)
    {
-      this->add_event_function();
+      add_event_function();
    }
    
    virtual ~cppClass() {};
 
    void emit(std::ostream &of, int level = 0) const;
    const std::string &get_name() const { return name_; }
-   void addParam(cpp_param item) { constrParam_.push_front(item); }
    void add_var(cpp_var *item) { scope_.add_decl(item); }
    void add_stmt(cpp_assign_stmt* ass) { statements_.push_back(ass); };
    void add_function(cpp_function* fun) { scope_.add_decl(fun); };
 
    cpp_scope *get_scope() { return &scope_; }
+   cpp_function *get_costructor();
 
 private:
    void add_event_function();
 
-   // Parameters of the constructor
-   // FIXME: I should use a cpp_function for this.
-   std::list<cpp_param> constrParam_;
    // Functions
    std::list<cpp_assign_stmt*> statements_;
    // Class name

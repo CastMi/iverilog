@@ -155,6 +155,15 @@ void cppClass::add_event_function()
    add_function(functionTwo);
 }
 
+cpp_function *cppClass::get_costructor()
+{
+   cpp_decl* temp = scope_.get_decl(name_);
+   assert(temp);
+   cpp_function* retvalue = dynamic_cast<cpp_function*>(temp);
+   assert(retvalue);
+   return retvalue;
+}
+
 void cppClass::emit(std::ostream &of, int level) const
 {
    // TODO:
@@ -168,16 +177,7 @@ void cppClass::emit(std::ostream &of, int level) const
    // Should every class inherit from simulation Object?
    of << "class " << name_ << " : public warped::SimulationObject {";
    newline(of, level);
-   of << "public :";
-   newline(of, indent(level));
-   of << name_ << "(";
-   
-   // Generate constructor parameters
-   if(!constrParam_.empty())
-      for(std::list<cpp_param>::const_iterator it = constrParam_.begin(); it != constrParam_.end(); ++it)
-         // FIXME: handle commas
-         (*it).emit(of, level);
-   of << ");";
+   of << "public:";
 
    if (!scope_.empty()) {
       newline(of, indent(level));
@@ -233,11 +233,12 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
 
 void cpp_function::emit(std::ostream &of, int level) const
 {
-   newline(of, level);
-   type_->emit(of, level);
+   // constructor doesn't have return type
+   if(type_)
+      type_->emit(of, level);
    of << name_ << " (";
    if(!scope_.get_decls().empty())
-      emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ",");
+      emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ",", false);
    of << ")";
 }
 

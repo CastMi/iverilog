@@ -29,20 +29,23 @@ template <class T>
 void emit_children(std::ostream &of,
                    const std::list<T*> &children,
                    int level, const char *delim = "",
-                   bool trailing_newline = true)
+                   bool final_delim = true)
 {
    // Don't indent if there are no children
    if (children.empty())
       newline(of, level);
    else {
       typename std::list<T*>::const_iterator it;
+      int sz = children.size();
       for (it = children.begin(); it != children.end(); ++it) {
          newline(of, indent(level));
          (*it)->emit(of, indent(level));
-         of << delim;
+         if(--sz > 0)
+            of << delim;
       }
-      if (trailing_newline)
-         newline(of, level);
+      if(final_delim)
+         of << delim;
+      newline(of, level);
    }
 }
 
