@@ -33,7 +33,7 @@
 #include <cstdlib>
 
 static const char*version_string =
-"Icarus Verilog NULL Code Generator " VERSION " (" VERSION_TAG ")\n\n"
+"Icarus Verilog C++ Code Generator " VERSION " (" VERSION_TAG ")\n\n"
 "Copyright (c) 2000-2014 Stephen Williams (steve@icarus.com)\n\n"
 "  This program is free software; you can redistribute it and/or modify\n"
 "  it under the terms of the GNU General Public License as published by\n"
@@ -105,11 +105,10 @@ extern "C" int target_design(ivl_design_t des)
    if (0 == g_errors) {
       const char *ofname = ivl_design_flag(des, "-o");
       ofstream outfile(ofname);
-      outfile << "// This C++ was converted from Verilog using the" << endl
-              << "// Icarus Verilog VHDL Code Generator " VERSION
+      outfile << "// This C++ code was converted from Verilog using the" << endl
+              << "// Icarus Verilog C++ Code Generator " VERSION
                  " (" VERSION_TAG ")" << endl << endl;
 
-      // TODO: divide in "emit_declaration" and "emit_implementation"
       emit_everything(outfile);
    }
 

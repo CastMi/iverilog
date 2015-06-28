@@ -39,11 +39,12 @@ ivl_signal_t find_signal_named(const std::string &name, const cpp_scope *scope);
 void remember_class(cppClass *ent, ivl_scope_t scope);
 cppClass* find_class(ivl_scope_t scope);
 cppClass* find_class(const std::string& name);
+
 void emit_everything(std::ostream& os);
 void free_all_cpp_objects();
 
-cppClass *get_active_entity();
-void set_active_entity(cppClass *ent);
+cppClass *get_active_class();
+void set_active_class(cppClass *ent);
 
 bool is_default_scope_instance(ivl_scope_t s);
 bool seen_this_scope_type(ivl_scope_t s);

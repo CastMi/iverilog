@@ -506,11 +506,11 @@ extern "C" int draw_all_logic_and_lpm(ivl_scope_t scope, void *)
       cppClass *theclass = find_class(scope);
       assert(theclass);
 
-      set_active_entity(theclass);
+      set_active_class(theclass);
       {
          declare_logic(theclass, scope);
       }
-      set_active_entity(NULL);
+      set_active_class(NULL);
    }
 
    return ivl_scope_children(scope, draw_all_logic_and_lpm, scope);

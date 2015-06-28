@@ -29,6 +29,9 @@
 
 using namespace std;
 
+#define WARPED_INIT_EVENT_FUN_NAME "createInitialEvents"
+#define WARPED_HANDLE_EVENT_FUN_NAME "receiveEvent"
+
 class cpp_scope;
 class cppClass;
 
@@ -142,7 +145,7 @@ class cpp_decl : public cpp_element {
 public:
    cpp_decl(const string& name, const cpp_type *type = NULL)
       : name_(name), type_(type) {}
-   virtual ~cpp_decl();
+   virtual ~cpp_decl() {};
 
    const std::string &get_name() const { return name_; }
    const cpp_type *get_type() const;
@@ -230,28 +233,34 @@ private:
    cpp_scope *parent_;
 };
 
+class cpp_assign_stmt {
+public:
+   cpp_assign_stmt(cpp_var_ref *lhs, cpp_expr *rhs)
+      : lhs_(lhs), rhs_(rhs), after_(NULL) {}
+   virtual ~cpp_assign_stmt() {};
+
+   void emit(std::ostream &of, int level = 0) const;
+   void set_after(cpp_expr *after) { after_ = after; }
+protected:
+   cpp_var_ref *lhs_;
+   cpp_expr *rhs_, *after_;
+};
+
 /*
  * Roughly these map onto Verilog's processes, functions
  * and tasks.
  */
 class cpp_procedural {
 public:
-   cpp_procedural() : contains_wait_stmt_(false) {}
+   cpp_procedural() {}
    virtual ~cpp_procedural() {}
 
    virtual cpp_scope *get_scope() { return &scope_; }
-
-   void added_wait_stmt() { contains_wait_stmt_ = true; }
-   bool contains_wait_stmt() const { return contains_wait_stmt_; }
+   void add_stmt(cpp_assign_stmt* ass) { statements_.push_back(ass); };
 
 protected:
    cpp_scope scope_;
-
-   // If this is true then the body contains a `wait' statement
-   // embedded in it somewhere
-   // If this is the case then we can't use a sensitivity list for
-   // the process
-   bool contains_wait_stmt_;
+   std::list<cpp_assign_stmt*> statements_;
 
    // The set of variable we have performed a blocking
    // assignment to
@@ -276,23 +285,8 @@ public:
    void add_param(cpp_var *p) { scope_.add_decl(p); }
 
 private:
-   // Parameters
-   cpp_scope scope_;
    // Local vars
    cpp_scope variables_;
-};
-
-class cpp_assign_stmt {
-public:
-   cpp_assign_stmt(cpp_var_ref *lhs, cpp_expr *rhs)
-      : lhs_(lhs), rhs_(rhs), after_(NULL) {}
-   virtual ~cpp_assign_stmt() {};
-
-   void emit(std::ostream &of, int level = 0) const;
-   void set_after(cpp_expr *after) { after_ = after; }
-protected:
-   cpp_var_ref *lhs_;
-   cpp_expr *rhs_, *after_;
 };
 
 /*
@@ -306,7 +300,6 @@ public:
    void emit(std::ostream &of, int level = 0) const;
    const std::string &get_name() const { return name_; }
    void add_var(cpp_var *item) { scope_.add_decl(item); }
-   void add_stmt(cpp_assign_stmt* ass) { statements_.push_back(ass); };
    void add_function(cpp_function* fun) { scope_.add_decl(fun); };
 
    cpp_scope *get_scope() { return &scope_; }
@@ -315,8 +308,6 @@ public:
 private:
    void add_event_function();
 
-   // Functions
-   std::list<cpp_assign_stmt*> statements_;
    // Class name
    std::string name_;
    cpp_scope scope_;

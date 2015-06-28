@@ -32,24 +32,6 @@
 using namespace std;
 
 /*
- * This file stores all the global state required during VHDL code
- * generation. At present we store the following:
- *
- *  - A mapping from Verilog signals to the VHDL scope (entity, etc.)
- *    where it is found, and the name of the corresponding VHDL signal.
- *    This allows us to support renaming invalid Verilog signal names
- *    to valid VHDL ones.
- *
- *  - The set of all VHDL entities generated.
- *
- *  - The currently active entity. "Active" here means that we are
- *    currently generating code for a process inside the corresponding
- *    scope. This is useful, for example, if a statement or expression
- *    in a process needs to add are referencing something in the containing
- *    architecture object.
- */
-
-/*
  * Maps a signal to the scope it is defined within. Also
  * provides a mechanism for renaming signals -- i.e. when
  * an output has the same name as register: valid in Verilog
@@ -61,20 +43,20 @@ struct signal_defn_t {
    cpp_scope *scope;       // The scope where it is defined
 };
 
-// All entities to emit.
+// All classes to emit.
 // These are stored in a list rather than a set so the first
-// entity added will correspond to the first (top) Verilog module
+// class added will correspond to the first (top) Verilog module
 // encountered and hence it will appear first in the output file.
-static std::list<cppClass*> g_entities;
+static std::list<cppClass*> g_classes;
 
-// Store the mapping of ivl scope names to entity names
+// Store the mapping of ivl scope names to class names
 static map<ivl_scope_t, string> g_scope_names;
 
 typedef std::map<ivl_signal_t, signal_defn_t> signal_defn_map_t;
 static signal_defn_map_t g_known_signals;
 
 
-static cppClass *g_active_entity = NULL;
+static cppClass *g_active_class = NULL;
 
 // Set of scopes that are treated as the default examples of
 // that type. Any other scopes of the same type are ignored.
@@ -82,15 +64,14 @@ typedef vector<ivl_scope_t> default_scopes_t;
 static default_scopes_t g_default_scopes;
 
 // True if signal `sig' has already been encountered by the code
-// generator. This means we have already assigned it to a VHDL code
+// generator. This means we have already assigned it to a C++
 // object and possibly renamed it.
 bool seen_signal_before(ivl_signal_t sig)
 {
    return g_known_signals.find(sig) != g_known_signals.end();
 }
 
-// Remember the association of signal to a VHDL code object (typically
-// an entity).
+// Remember the association of signal to a C++ object
 void remember_signal(ivl_signal_t sig, cpp_scope *scope)
 {
    assert(!seen_signal_before(sig));
@@ -99,7 +80,7 @@ void remember_signal(ivl_signal_t sig, cpp_scope *scope)
    g_known_signals[sig] = defn;
 }
 
-// Change the VHDL name of a Verilog signal.
+// Change the C++ name of a Verilog signal.
 void rename_signal(ivl_signal_t sig, const std::string &renamed)
 {
    assert(seen_signal_before(sig));
@@ -107,7 +88,7 @@ void rename_signal(ivl_signal_t sig, const std::string &renamed)
    g_known_signals[sig].renamed = renamed;
 }
 
-// Given a Verilog signal, return the VHDL code object where it should
+// Given a Verilog signal, return the C++ object where it should
 // be defined. Note that this can return a NULL pointer if `sig' hasn't
 // be encountered yet.
 cpp_scope *find_scope_for_signal(ivl_signal_t sig)
@@ -118,7 +99,7 @@ cpp_scope *find_scope_for_signal(ivl_signal_t sig)
       return NULL;
 }
 
-// Get the name of the VHDL signal corresponding to Verilog signal `sig'.
+// Get the name of the C++ var corresponding to Verilog signal `sig'.
 const std::string &get_renamed_signal(ivl_signal_t sig)
 {
    assert(seen_signal_before(sig));
@@ -142,7 +123,7 @@ ivl_signal_t find_signal_named(const std::string &name, const cpp_scope *scope)
    return NULL;
 }
 
-// Compare the name of an entity against a string
+// Compare the name of a class against a string
 struct cmp_ent_name {
    cmp_ent_name(const string& n) : name_(n) {}
 
@@ -154,22 +135,22 @@ struct cmp_ent_name {
    const string& name_;
 };
 
-// Find an entity given its name.
+// Find a class given its name.
 cppClass* find_class(const string& name)
 {
    std::list<cppClass*>::const_iterator it
-      = find_if(g_entities.begin(), g_entities.end(),
+      = find_if(g_classes.begin(), g_classes.end(),
                 cmp_ent_name(name));
 
-   if (it != g_entities.end())
+   if (it != g_classes.end())
       return *it;
    else
       return NULL;
 }
 
-// Find a VHDL entity given a Verilog module scope. The VHDL entity
+// Find a C++ class given a Verilog module scope. The C++ class
 // name should be the same as the Verilog module type name.
-// Note that this will return NULL if no entity has been recorded
+// Note that this will return NULL if no class has been recorded
 // for this scope type.
 cppClass* find_class(ivl_scope_t scope)
 {
@@ -199,25 +180,28 @@ cppClass* find_class(ivl_scope_t scope)
    }
 }
 
-// Add an entity/architecture pair to the list of entities to emit.
+// Add the class to the list of entities to emit.
 void remember_class(cppClass* theclass, ivl_scope_t scope)
 {
-   g_entities.push_back(theclass);
+   g_classes.push_back(theclass);
    g_scope_names[scope] = theclass->get_name();
 }
 
-// Print all VHDL entities, in order, to the specified output stream.
+// Print all C++ classes, in order, to the specified output stream.
 void emit_everything(std::ostream& os)
 {
-   for (entity_list_t::iterator it = g_entities.begin();
-        it != g_entities.end();
+   for (entity_list_t::iterator it = g_classes.begin();
+        it != g_classes.end();
         ++it) {
-         (*it)->emit(os);
+      // TODO: divide in "emit_declaration" and "emit_implementation"
+      // Something like:
+      // emit_declaration(outfile);
+      // emit_implementation(outfile);
+      (*it)->emit(os);
    }
 }
 
-// Release all memory for the VHDL objects. No vhdl_element pointers
-// will be valid after this call.
+// Release all memory for the C++ objects.
 void free_all_cpp_objects()
 {
    int freed = cpp_element::free_all_objects();
@@ -226,19 +210,19 @@ void free_all_cpp_objects()
    size_t total = cpp_element::total_allocated();
    debug_msg("%d total bytes used for VHDL syntax objects", total);
 
-   g_entities.clear();
+   g_classes.clear();
 }
 
 // Return the currently active entity
-cppClass *get_active_entity()
+cppClass *get_active_class()
 {
-   return g_active_entity;
+   return g_active_class;
 }
 
 // Change the currently active entity
-void set_active_entity(cppClass *ent)
+void set_active_class(cppClass *ent)
 {
-   g_active_entity = ent;
+   g_active_class = ent;
 }
 
 /*

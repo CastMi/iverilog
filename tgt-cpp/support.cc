@@ -27,7 +27,7 @@
 
 void require_support_function(support_function_t f)
 {
-   cpp_scope *scope = get_active_entity()->get_scope();
+   cpp_scope *scope = get_active_class()->get_scope();
    if (!scope->have_declared(support_function::function_name(f)))
       scope->add_decl(new support_function(f));
 }

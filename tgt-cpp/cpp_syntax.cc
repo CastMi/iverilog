@@ -157,8 +157,8 @@ void cppClass::add_event_function()
    cpp_type *returnType = new cpp_type(CPP_TYPE_STD_VECTOR,
          new cpp_type(CPP_TYPE_SHARED_PTR,
          new cpp_type(CPP_TYPE_WARPED_EVENT)));
-   cpp_function *functionOne = new cpp_function("createInitialEvents", returnType);
-   cpp_function *functionTwo = new cpp_function("receiveEvent", returnType);
+   cpp_function *functionOne = new cpp_function(WARPED_INIT_EVENT_FUN_NAME, returnType);
+   cpp_function *functionTwo = new cpp_function(WARPED_HANDLE_EVENT_FUN_NAME, returnType);
    cpp_type *event_type = new cpp_type(CPP_TYPE_WARPED_EVENT);
    event_type->set_const();
    cpp_var *event_param = new cpp_var("event", event_type);
@@ -196,22 +196,9 @@ void cppClass::emit(std::ostream &of, int level) const
       emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ";");
    }
 
-   if(!statements_.empty())
-   {
-      newline(of, level);
-      of << "instructions: ";
-      newline(of, level);
-      // FIXME: handle syntax
-      emit_children<cpp_assign_stmt>(of, statements_, indent(level), ";");
-   }
-   
    newline(of, level);
    of << "}; ";
    newline(of, indent(level));
-}
-
-cpp_decl::~cpp_decl()
-{
 }
 
 const cpp_type *cpp_decl::get_type() const
@@ -251,7 +238,10 @@ void cpp_function::emit(std::ostream &of, int level) const
    of << name_ << " (";
    if(!scope_.get_decls().empty())
       emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ",", false);
-   of << ")";
+   of << ") {";
+   if(!statements_.empty())
+      emit_children<cpp_assign_stmt>(of, statements_, indent(level), ";");
+   of << "}";
 }
 
 void cpp_param::emit(std::ostream &of, int level) const

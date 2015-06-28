@@ -58,6 +58,10 @@ static cpp_expr *translate_logic_inputs(cpp_scope *scope, ivl_net_logic_t log)
    switch (ivl_logic_type(log)) {
    case IVL_LO_NOT:
       return input_to_expr(scope, CPP_UNARYOP_NOT, log);
+   case IVL_LO_BUF:
+   case IVL_LO_BUFT:
+   case IVL_LO_BUFZ:
+      return nexus_to_var_ref(scope, ivl_logic_pin(log, 1));
    case IVL_LO_AND:
       return inputs_to_expr(scope, CPP_BINOP_AND, log);
    case IVL_LO_OR:
@@ -70,6 +74,10 @@ static cpp_expr *translate_logic_inputs(cpp_scope *scope, ivl_net_logic_t log)
       return inputs_to_expr(scope, CPP_BINOP_XOR, log);
    case IVL_LO_XNOR:
       return inputs_to_expr(scope, CPP_BINOP_XNOR, log);
+   case IVL_LO_PULLUP:
+      return new cpp_const_expr("1", new cpp_type(CPP_TYPE_INT));
+   case IVL_LO_PULLDOWN:
+      return new cpp_const_expr("0", new cpp_type(CPP_TYPE_INT));
    default:
       return new cpp_const_expr("NULL", new cpp_type(CPP_TYPE_CUSTOM));
       /*
@@ -80,13 +88,14 @@ static cpp_expr *translate_logic_inputs(cpp_scope *scope, ivl_net_logic_t log)
    }
 }
 
-void draw_logic(cppClass *arch, ivl_net_logic_t log)
+void draw_logic(cppClass *theclass, ivl_net_logic_t log)
 {
    switch (ivl_logic_type(log)) {
    case IVL_LO_BUFIF0:
    case IVL_LO_BUFIF1:
+   case IVL_LO_NOTIF0:
+   case IVL_LO_NOTIF1:
    case IVL_LO_UDP:
-   case IVL_LO_BUFZ:
       {
          error("Don't know how to translate logic type = %d to expression",
                ivl_logic_type(log));
@@ -96,12 +105,16 @@ void draw_logic(cppClass *arch, ivl_net_logic_t log)
       {
          // The output is always pin zero
          ivl_nexus_t output = ivl_logic_pin(log, 0);
-         cpp_var_ref *lhs = nexus_to_var_ref(arch->get_scope(), output);
+         cpp_var_ref *lhs = nexus_to_var_ref(theclass->get_scope(), output);
   
-         cpp_expr *rhs = translate_logic_inputs(arch->get_scope(), log);
+         cpp_expr *rhs = translate_logic_inputs(theclass->get_scope(), log);
          cpp_assign_stmt *ass = new cpp_assign_stmt(lhs, rhs);
 
-         arch->add_stmt(ass);
+         cpp_decl* temp = theclass->get_scope()->get_decl(WARPED_HANDLE_EVENT_FUN_NAME);
+         assert(temp);
+         cpp_function* fun = dynamic_cast<cpp_function*>(temp);
+         assert(fun);
+         fun->add_stmt(ass);
       }
    }
 }
