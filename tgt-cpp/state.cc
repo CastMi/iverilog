@@ -180,7 +180,16 @@ cppClass* find_class(ivl_scope_t scope)
    }
 }
 
-// Add the class to the list of entities to emit.
+// WARNING!
+// This function should be called only to create classes that are
+// not directly specified by the original HDL code.
+// Right now is used only to print the "Event" class.
+void remember_event_class(cppClass* theclass)
+{
+   g_classes.push_front(theclass);
+}
+
+// Add the class to the list of classes to emit.
 void remember_class(cppClass* theclass, ivl_scope_t scope)
 {
    g_classes.push_back(theclass);

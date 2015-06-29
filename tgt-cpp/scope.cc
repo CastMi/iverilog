@@ -182,7 +182,6 @@ static void link_scope_to_nexus_tmp(nexus_private_t *priv, cpp_scope *scope,
 void draw_nexus(ivl_nexus_t nexus)
 {
    nexus_private_t *priv = new nexus_private_t;
-   int nexus_signal_width = -1;
    priv->const_driver = NULL;
 
    int nptrs = ivl_nexus_ptrs(nexus);
@@ -202,8 +201,6 @@ void draw_nexus(ivl_nexus_t nexus)
             unsigned pin = ivl_nexus_ptr_pin(nexus_ptr);
             link_scope_to_nexus_signal(priv, scope, sig, pin);
          }
-
-         nexus_signal_width = ivl_signal_width(sig);
       }
    }
 
@@ -420,7 +417,8 @@ static void create_skeleton_class_for(ivl_scope_t scope)
    // Create a class for each module
    cppClass *theClass = new cppClass(tname);
 
-   // Build a comment to add to the entity/architecture
+   // Build a comment to print out  in order to remember where
+   // this class come from
    ostringstream ss;
    ss << "Generated from Verilog module " << ivl_scope_tname(scope)
       << " (" << ivl_scope_def_file(scope) << ":"
@@ -578,4 +576,11 @@ int draw_scope(ivl_scope_t scope, void *_parent)
       return rc;
    
    return 0;
+}
+
+void draw_main()
+{
+   cppClass *theclass = new cppClass("EventClass", CPP_WARPED_EVENT);
+   theclass->set_comment("Create to store information about the triggered event");
+   remember_event_class(theclass);
 }

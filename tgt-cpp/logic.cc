@@ -110,10 +110,7 @@ void draw_logic(cppClass *theclass, ivl_net_logic_t log)
          cpp_expr *rhs = translate_logic_inputs(theclass->get_scope(), log);
          cpp_assign_stmt *ass = new cpp_assign_stmt(lhs, rhs);
 
-         cpp_decl* temp = theclass->get_scope()->get_decl(WARPED_HANDLE_EVENT_FUN_NAME);
-         assert(temp);
-         cpp_function* fun = dynamic_cast<cpp_function*>(temp);
-         assert(fun);
+         cpp_function* fun = theclass->get_function(WARPED_HANDLE_EVENT_FUN_NAME);
          fun->add_stmt(ass);
       }
    }

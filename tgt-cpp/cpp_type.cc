@@ -36,18 +36,29 @@ std::string cpp_type::get_string() const
    switch (name_)
    {
        case CPP_TYPE_WARPED_EVENT:
-         return returnvalue + "warped::Event";
+         returnvalue += "warped::Event";
+         break;
+       case CPP_TYPE_WARPED_OBJECT_STATE:
+         returnvalue += "warped::ObjectState";
+         break;
        case CPP_TYPE_CUSTOM:
-         return std::string("myCustomType");
+         returnvalue += std::string("myCustomType");
+         break;
       case CPP_TYPE_INT:
-         return std::string("int");
+         returnvalue += std::string("int");
+         break;
+      case CPP_TYPE_UNSIGNED_INT:
+         returnvalue += std::string("unsigned int");
+         break;
       case CPP_TYPE_STD_STRING:
-         return std::string("std::string");
+         returnvalue += std::string("std::string");
+         break;
       default:
           error("Unhandled type");
-          // the following return fix a compiler warning
-          return "";
-    }
+   }
+   if(isreference)
+      returnvalue += "&";
+   return returnvalue;
 }
 
 /*

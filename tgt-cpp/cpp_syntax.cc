@@ -107,7 +107,7 @@ void cpp_const_expr::emit(std::ostream &of, int) const
    of << "\"" << value_ << "\"";
 }
 
-void cpp_var_ref::emit(std::ostream &of, int level) const
+void cpp_var_ref::emit(std::ostream &of, int) const
 {
    of << name_;
 }
@@ -136,54 +136,96 @@ void cpp_assign_stmt::emit(std::ostream &of, int level) const
    //this->after_->emit(of, level);
 }
 
-cppClass::cppClass(const string& name)
-      : name_(name)
+cppClass::cppClass(const string& name, cpp_inherited_class in)
+      : name_(name), in_(in)
 {
-   add_event_function();
-   // Every module has outputs.
+   switch(in_)
+   {
+      case CPP_WARPED_EVENT:
+         add_event_functions();
+         break;
+      case CPP_WARPED_SIM_OBJ:
+         add_simulation_functions();
+         break;
+   }
+}
+
+void cppClass::add_event_functions()
+{
+   cpp_type* returnType1 = new cpp_type(CPP_TYPE_STD_STRING);
+   returnType1->set_const();
+   returnType1->set_reference();
+   cpp_type *returnType2 = new cpp_type(CPP_TYPE_UNSIGNED_INT);
+   cpp_function *rec_name = new cpp_function("receiverName", returnType1);
+   rec_name->set_const();
+   cpp_function *timestamp = new cpp_function("timestamp", returnType2);
+   timestamp->set_const();
+   cpp_var *receiver_var = new cpp_var("receiver_name", new cpp_type(CPP_TYPE_STD_STRING));
+   cpp_var *timestamp_var = new cpp_var("ts_", new cpp_type(CPP_TYPE_UNSIGNED_INT));
+   add_var(receiver_var);
+   add_var(timestamp_var);
+   add_function(rec_name);
+   add_function(timestamp);
+}
+
+void cppClass::add_simulation_functions()
+{
    cpp_type* temp = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_STD_STRING));
    temp->add_type(new cpp_type(CPP_TYPE_STD_STRING));
    cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_VECTOR,
             new cpp_type(CPP_TYPE_STD_PAIR, temp)));
+   inputvar->set_comment("Inputs");
    add_var(inputvar);
-}
-
-void cppClass::add_event_function()
-{
    cpp_type *returnType = new cpp_type(CPP_TYPE_STD_VECTOR,
          new cpp_type(CPP_TYPE_SHARED_PTR,
          new cpp_type(CPP_TYPE_WARPED_EVENT)));
-   cpp_function *functionOne = new cpp_function(WARPED_INIT_EVENT_FUN_NAME, returnType);
-   cpp_function *functionTwo = new cpp_function(WARPED_HANDLE_EVENT_FUN_NAME, returnType);
+   cpp_function *init_fun = new cpp_function(WARPED_INIT_EVENT_FUN_NAME, returnType);
+   // event_handler
+   cpp_function *event_handler = new cpp_function(WARPED_HANDLE_EVENT_FUN_NAME, returnType);
    cpp_type *event_type = new cpp_type(CPP_TYPE_WARPED_EVENT);
+   event_type->set_reference();
    event_type->set_const();
    cpp_var *event_param = new cpp_var("event", event_type);
-   functionTwo->add_param(event_param);
-   add_function(functionOne);
-   add_function(functionTwo);
+   event_handler->add_param(event_param);
+   // get_state
+   cpp_type *get_state_ret_type = new cpp_type(CPP_TYPE_WARPED_OBJECT_STATE);
+   get_state_ret_type->set_reference();
+   cpp_function *get_state_fun = new cpp_function("get_state", get_state_ret_type);
+   // TODO: handle input.
+   add_function(init_fun);
+   add_function(get_state_fun);
+   add_function(event_handler);
 }
 
-cpp_function *cppClass::get_costructor()
+cpp_function *cppClass::get_function(const std::string &name) const
 {
-   cpp_decl* temp = scope_.get_decl(name_);
+   cpp_decl* temp = scope_.get_decl(name);
    assert(temp);
    cpp_function* retvalue = dynamic_cast<cpp_function*>(temp);
    assert(retvalue);
    return retvalue;
 }
 
+cpp_function *cppClass::get_costructor()
+{
+   return get_function(name_);
+}
+
 void cppClass::emit(std::ostream &of, int level) const
 {
-   // TODO:
-   // Handle includes
-   of << "#include <warped.hpp>" << std::endl;
-   of << "#include <vector>" << std::endl;         
-   of << std::endl;
-
+   newline(of, level);
    emit_comment(of, level);
-   // TODO:
-   // Should every class inherit from simulation Object?
-   of << "class " << name_ << " : public warped::SimulationObject {";
+   of << "class " << name_;
+   switch(in_)
+   {
+      case CPP_WARPED_SIM_OBJ:
+         of << " : public warped::SimulationObject";
+         break;
+      case CPP_WARPED_EVENT:
+         of << " : public warped::Event";
+         break;
+   }
+   of << " {";
    newline(of, level);
    of << "public:";
 
@@ -234,7 +276,10 @@ void cpp_function::emit(std::ostream &of, int level) const
    of << name_ << " (";
    if(!scope_.get_decls().empty())
       emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ",", false);
-   of << ") {";
+   of << ")";
+   if(isconst)
+      of << " const";
+   of << " {";
    if(!statements_.empty())
       emit_children<cpp_assign_stmt>(of, statements_, indent(level), ";");
    of << "}";

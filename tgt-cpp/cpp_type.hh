@@ -26,7 +26,9 @@
 
 enum cpp_type_name_t {
    CPP_TYPE_INT,
+   CPP_TYPE_UNSIGNED_INT,
    CPP_TYPE_STD_STRING,
+   CPP_TYPE_WARPED_OBJECT_STATE,
    CPP_TYPE_WARPED_EVENT,
    CPP_TYPE_CUSTOM,
    CPP_TYPE_NOTYPE,
@@ -39,8 +41,9 @@ enum cpp_type_name_t {
 class cpp_type : public cpp_element {
 public:
    // Scalar constructors
-   cpp_type(cpp_type_name_t name, cpp_type *base = NULL, bool constant = false)
-      : name_(name), isconst(constant)
+   cpp_type(cpp_type_name_t name, cpp_type *base = NULL,
+         bool constant = false, bool reference = false)
+      : name_(name), isconst(constant), isreference(reference)
    {
       if(base != NULL)
          base_.push_back(base);
@@ -53,7 +56,7 @@ public:
    std::string get_decl_string() const;
    std::string get_type_decl_string() const;
    void set_const() { isconst = true; }
-   bool get_const() const { return isconst; }
+   void set_reference() { isreference = true; }
    void add_type(cpp_type* el) { base_.push_front(el); }
 
 protected:
@@ -61,7 +64,7 @@ protected:
    // the following field should be not empty if and only if the
    // "name_" field has a value of a template.
    std::list<cpp_type*> base_;
-   bool isconst;
+   bool isconst, isreference;
 };
 
 #endif

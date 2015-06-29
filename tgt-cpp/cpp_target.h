@@ -15,6 +15,7 @@ using namespace std;
 void error(const char *fmt, ...);
 void debug_msg(const char *fmt, ...);
 
+void draw_main();
 int draw_scope(ivl_scope_t scope, void *_parent);
 extern "C" int draw_process(ivl_process_t net, void *cd);
 void draw_nexus(ivl_nexus_t nexus);

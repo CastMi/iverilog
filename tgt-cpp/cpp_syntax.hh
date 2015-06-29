@@ -250,15 +250,17 @@ protected:
  */
 class cpp_procedural {
 public:
-   cpp_procedural() {}
+   cpp_procedural(bool constant) : isconst(constant) {}
    virtual ~cpp_procedural() {}
 
    virtual cpp_scope *get_scope() { return &scope_; }
    void add_stmt(cpp_assign_stmt* ass) { statements_.push_back(ass); };
+   void set_const() { isconst = true; }
 
 protected:
    cpp_scope scope_;
    std::list<cpp_assign_stmt*> statements_;
+   bool isconst;
 
    // The set of variable we have performed a blocking
    // assignment to
@@ -268,8 +270,9 @@ protected:
 
 class cpp_function : public cpp_decl, public cpp_procedural {
 public:
-   cpp_function(const char *name, cpp_type *ret_type)
-      : cpp_decl(name, ret_type)
+   cpp_function(const char *name, cpp_type *ret_type,
+         bool constant = false)
+      : cpp_decl(name, ret_type), cpp_procedural(constant)
    {
       // A function contains two scopes:
       // scope_ = The parameters
@@ -287,12 +290,17 @@ private:
    cpp_scope variables_;
 };
 
+enum cpp_inherited_class {
+   CPP_WARPED_EVENT,
+   CPP_WARPED_SIM_OBJ
+};
+
 /*
  * Every module is class.
  */
 class cppClass : public cpp_element {
 public:
-   cppClass(const string& name);
+   cppClass(const string& name, cpp_inherited_class in = CPP_WARPED_SIM_OBJ);
    virtual ~cppClass() {};
 
    void emit(std::ostream &of, int level = 0) const;
@@ -302,13 +310,16 @@ public:
 
    cpp_scope *get_scope() { return &scope_; }
    cpp_function *get_costructor();
+   cpp_function *get_function(const std::string &name) const;
 
 private:
-   void add_event_function();
+   void add_simulation_functions();
+   void add_event_functions();
 
    // Class name
    std::string name_;
    cpp_scope scope_;
+   cpp_inherited_class in_;
 };
 
 typedef std::list<cppClass*> entity_list_t;
