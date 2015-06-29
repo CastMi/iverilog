@@ -37,7 +37,7 @@ static cpp_expr *inputs_to_expr(cpp_scope *scope, cpp_binop_t op,
    for (int i = 1; i < npins; i++) {
       ivl_nexus_t input = ivl_logic_pin(log, i);
 
-      theop->add_expr(readable(scope, input));
+      theop->add_expr(readable_ref(scope, input));
    }
 
    return theop;
@@ -49,7 +49,7 @@ static cpp_expr *input_to_expr(cpp_scope *scope, cpp_unaryop_t op,
    ivl_nexus_t input = ivl_logic_pin(log, 1);
    assert(input);
 
-   cpp_expr *operand = readable(scope, input);
+   cpp_expr *operand = readable_ref(scope, input);
    return new cpp_unaryop_expr(op, operand, new cpp_type(CPP_TYPE_INT));
 }
 

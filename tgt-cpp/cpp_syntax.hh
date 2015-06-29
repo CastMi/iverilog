@@ -74,9 +74,8 @@ enum cpp_unaryop_t {
  */
 class cpp_var_ref : public cpp_expr {
 public:
-   cpp_var_ref(const string& name, const cpp_type *type,
-                cpp_expr *slice = NULL)
-      : cpp_expr(type), name_(name), slice_(slice) {}
+   cpp_var_ref(const string& name, const cpp_type *type)
+      : cpp_expr(type), name_(name) {}
    ~cpp_var_ref() {};
 
    void emit(std::ostream &of, int level) const;
@@ -85,7 +84,6 @@ public:
 
 private:
    std::string name_;
-   cpp_expr *slice_;
 };
 
 /*

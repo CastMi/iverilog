@@ -36,11 +36,6 @@ enum cpp_type_name_t {
    CPP_TYPE_STD_VECTOR
 };
 
-/*
- * A type at the moment is just a name. It shouldn't get
- * too much more complex, as Verilog's type system is much
- * simpler than VHDL's.
- */
 class cpp_type : public cpp_element {
 public:
    // Scalar constructors

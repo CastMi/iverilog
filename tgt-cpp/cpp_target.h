@@ -20,7 +20,7 @@ extern "C" int draw_process(ivl_process_t net, void *cd);
 void draw_nexus(ivl_nexus_t nexus);
 
 cpp_var_ref *nexus_to_var_ref(cpp_scope *scope, ivl_nexus_t nexus);
-cpp_var_ref* readable(cpp_scope* scope, ivl_nexus_t nex);
+cpp_var_ref* readable_ref(cpp_scope* scope, ivl_nexus_t nex);
 string make_safe_name(ivl_signal_t sig);
 void require_support_function(support_function_t f);
 void draw_logic(cppClass *arch, ivl_net_logic_t log);

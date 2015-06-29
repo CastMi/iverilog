@@ -177,7 +177,7 @@ static void link_scope_to_nexus_tmp(nexus_private_t *priv, cpp_scope *scope,
 }
 
 /*
- * Generates VHDL code to fully represent a nexus.
+ * Generates C++ code to fully represent a nexus.
  */
 void draw_nexus(ivl_nexus_t nexus)
 {
@@ -300,10 +300,11 @@ cpp_var_ref *nexus_to_var_ref(cpp_scope *scope, ivl_nexus_t nexus)
    return ref;
 }
 
-cpp_var_ref * readable(cpp_scope* scope, ivl_nexus_t nex)
+cpp_var_ref* readable_ref(cpp_scope* scope, ivl_nexus_t nex)
 {
-   cpp_var_ref* var = nexus_to_var_ref(scope, nex);
-   return var;
+   cpp_var_ref* ref = nexus_to_var_ref(scope, nex);
+
+   return ref;
 }
 
 // Check if `name' differs from an existing name only in case and
@@ -332,7 +333,7 @@ static void declare_one_signal(cppClass *theclass, ivl_signal_t sig,
 
    string name(ivl_signal_basename(sig));
 
-   avoid_name_collision(name, theclass->get_scope());
+   //avoid_name_collision(name, theclass->get_scope());
 
    rename_signal(sig, name);
 
@@ -414,7 +415,7 @@ static void create_skeleton_class_for(ivl_scope_t scope)
 
    // Every module will be "translated" in a class
    // The type name will become the entity name
-   const string tname = valid_class_name(ivl_scope_tname(scope));
+   const string tname = ivl_scope_tname(scope);
 
    // Create a class for each module
    cppClass *theClass = new cppClass(tname);
@@ -542,7 +543,7 @@ extern "C" int draw_hierarchy(ivl_scope_t scope, void *_parent)
 
       // Make sure the name doesn't collide with anything we've
       // already declared
-      avoid_name_collision(inst_name, parent_ent->get_scope());
+      //avoid_name_collision(inst_name, parent_ent->get_scope());
 
       cpp_var *inst =
          new cpp_var(inst_name.c_str(), new cpp_type(CPP_TYPE_CUSTOM));

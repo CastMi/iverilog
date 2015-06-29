@@ -110,11 +110,6 @@ void cpp_const_expr::emit(std::ostream &of, int) const
 void cpp_var_ref::emit(std::ostream &of, int level) const
 {
    of << name_;
-   if (slice_) {
-      of << "("; 
-      slice_->emit(of, level);
-      of << ")";
-   }
 }
 
 void cpp_expr::open_parens(std::ostream& of)
@@ -134,7 +129,8 @@ void cpp_expr::close_parens(std::ostream& of)
 void cpp_assign_stmt::emit(std::ostream &of, int level) const
 {
    assert(lhs_ && rhs_);
-   of << lhs_ << " = ";
+   lhs_->emit(of, level);
+   of << " = ";
    this->rhs_->emit(of, level);
    of << " ";
    //this->after_->emit(of, level);
