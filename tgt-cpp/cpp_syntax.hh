@@ -270,25 +270,30 @@ protected:
  */
 class cpp_procedural {
 public:
-   cpp_procedural(bool constant) : isconst(constant) {}
+   cpp_procedural(bool constant = false, bool overridesomething = false,
+         bool virtualfun = false)
+      : isconst(constant), isoverride(overridesomething),
+        isvirtual(virtualfun) {}
    virtual ~cpp_procedural() {}
 
    virtual cpp_scope *get_scope() { return &scope_; }
    void add_stmt(cpp_stmt* item) { statements_.push_back(item); };
    void set_const() { isconst = true; }
+   void set_override() { isoverride = true; }
+   void set_virtual() { isvirtual = true; }
 
 protected:
    cpp_scope scope_;
    std::list<cpp_stmt*> statements_;
-   bool isconst;
+   bool isconst, isoverride, isvirtual;
 };
 
 
 class cpp_function : public cpp_decl, public cpp_procedural {
 public:
    cpp_function(const char *name, cpp_type *ret_type,
-         bool constant = false)
-      : cpp_decl(name, ret_type), cpp_procedural(constant)
+         bool constant = false, bool overridesomething = false)
+      : cpp_decl(name, ret_type), cpp_procedural(constant, overridesomething)
    {
       // A function contains two scopes:
       // scope_ = The parameters

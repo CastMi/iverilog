@@ -106,7 +106,7 @@ extern "C" int target_design(ivl_design_t des)
    if (0 == g_errors) {
       const char *ofname = ivl_design_flag(des, "-o");
       ofstream outfile(ofname);
-      outfile << "// This C++ code was converted using the" << endl
+      outfile << "// This C++11 compliant code was converted using the" << endl
               << "// Icarus Verilog C++ Code Generator " VERSION
                  " (" VERSION_TAG ")" << endl << endl
               << "#include <warped.hpp>" << endl

@@ -5,6 +5,7 @@ What is this?
 --------------
 
 I'm developing an Icarus Verilog target in order to print out C++ code.
+The generated code will be C++11 compliant.
 
 How can I simulate it?
 --------------

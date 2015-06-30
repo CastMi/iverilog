@@ -167,9 +167,11 @@ void cppClass::add_event_functions()
    cpp_function *rec_name = new cpp_function("receiverName", returnType1);
    rec_name->set_comment("Inherited getter method");
    rec_name->set_const();
+   rec_name->set_override();
    cpp_function *timestamp = new cpp_function("timestamp", returnType2);
    timestamp->set_comment("Inherited getter method");
    timestamp->set_const();
+   timestamp->set_override();
    cpp_var *receiver_var = new cpp_var("receiver_name", new cpp_type(CPP_TYPE_STD_STRING));
    cpp_var *timestamp_var = new cpp_var("ts_", new cpp_type(CPP_TYPE_UNSIGNED_INT));
    add_var(receiver_var);
@@ -193,8 +195,12 @@ void cppClass::add_simulation_functions()
          new cpp_type(CPP_TYPE_SHARED_PTR,
          new cpp_type(CPP_TYPE_WARPED_EVENT)));
    cpp_function *init_fun = new cpp_function(WARPED_INIT_EVENT_FUN_NAME, returnType);
+   init_fun->set_override();
+   init_fun->set_virtual();
    // event_handler
    cpp_function *event_handler = new cpp_function(WARPED_HANDLE_EVENT_FUN_NAME, returnType);
+   event_handler->set_override();
+   event_handler->set_virtual();
    cpp_type *event_type = new cpp_type(CPP_TYPE_WARPED_EVENT);
    event_type->set_reference();
    event_type->set_const();
@@ -204,6 +210,7 @@ void cppClass::add_simulation_functions()
    cpp_type *get_state_ret_type = new cpp_type(CPP_TYPE_WARPED_OBJECT_STATE);
    get_state_ret_type->set_reference();
    cpp_function *get_state_fun = new cpp_function("get_state", get_state_ret_type);
+   get_state_fun->set_override();
    // TODO: handle input.
    add_function(init_fun);
    add_function(get_state_fun);
@@ -284,6 +291,8 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
 void cpp_function::emit(std::ostream &of, int level) const
 {
    emit_comment(of, level);
+   if(isvirtual)
+      of << "virtual ";
    type_->emit(of, level);
    of << name_ << " (";
    if(!scope_.get_decls().empty())
@@ -291,6 +300,8 @@ void cpp_function::emit(std::ostream &of, int level) const
    of << ")";
    if(isconst)
       of << " const";
+   if(isoverride)
+      of << " override";
    of << " {";
    if(!statements_.empty())
       emit_children<cpp_stmt>(of, statements_, indent(level), ";");
