@@ -231,17 +231,37 @@ private:
    cpp_scope *parent_;
 };
 
-class cpp_assign_stmt {
+class cpp_stmt {
+public:
+   cpp_stmt() {};
+   virtual ~cpp_stmt() {};
+
+   virtual void emit(std::ostream &of, int level = 0) const = 0;
+};
+
+class cpp_return_stmt : public cpp_stmt {
+public:
+   cpp_return_stmt(cpp_var_ref *value)
+      : value_(value) {}
+   virtual ~cpp_return_stmt() {};
+
+   virtual void emit(std::ostream &of, int level = 0) const;
+
+protected:
+   cpp_var_ref *value_;
+};
+
+class cpp_assign_stmt : public cpp_stmt {
 public:
    cpp_assign_stmt(cpp_var_ref *lhs, cpp_expr *rhs)
-      : lhs_(lhs), rhs_(rhs), after_(NULL) {}
+      : lhs_(lhs), rhs_(rhs) {}
    virtual ~cpp_assign_stmt() {};
 
-   void emit(std::ostream &of, int level = 0) const;
-   void set_after(cpp_expr *after) { after_ = after; }
+   virtual void emit(std::ostream &of, int level = 0) const;
+
 protected:
    cpp_var_ref *lhs_;
-   cpp_expr *rhs_, *after_;
+   cpp_expr *rhs_;
 };
 
 /*
@@ -254,17 +274,13 @@ public:
    virtual ~cpp_procedural() {}
 
    virtual cpp_scope *get_scope() { return &scope_; }
-   void add_stmt(cpp_assign_stmt* ass) { statements_.push_back(ass); };
+   void add_stmt(cpp_stmt* item) { statements_.push_back(item); };
    void set_const() { isconst = true; }
 
 protected:
    cpp_scope scope_;
-   std::list<cpp_assign_stmt*> statements_;
+   std::list<cpp_stmt*> statements_;
    bool isconst;
-
-   // The set of variable we have performed a blocking
-   // assignment to
-   set<string> blocking_targets_;
 };
 
 

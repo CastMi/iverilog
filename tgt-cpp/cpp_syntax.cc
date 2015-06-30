@@ -126,14 +126,19 @@ void cpp_expr::close_parens(std::ostream& of)
       of << ")";
 }
 
+void cpp_return_stmt::emit(std::ostream &of, int level) const
+{
+   assert(value_);
+   of << "return ";
+   value_->emit(of, level);
+}
+
 void cpp_assign_stmt::emit(std::ostream &of, int level) const
 {
    assert(lhs_ && rhs_);
    lhs_->emit(of, level);
    of << " = ";
-   this->rhs_->emit(of, level);
-   of << " ";
-   //this->after_->emit(of, level);
+   rhs_->emit(of, level);
 }
 
 cppClass::cppClass(const string& name, cpp_inherited_class in)
@@ -167,11 +172,15 @@ void cppClass::add_event_functions()
    add_var(timestamp_var);
    add_function(rec_name);
    add_function(timestamp);
+   timestamp->add_stmt(new cpp_return_stmt(new cpp_var_ref(
+               timestamp_var->get_name(), timestamp_var->get_type())));
+   rec_name->add_stmt(new cpp_return_stmt(new cpp_var_ref(
+               receiver_var->get_name(), receiver_var->get_type())));
 }
 
 void cppClass::add_simulation_functions()
 {
-   cpp_type* temp = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_STD_STRING));
+   cpp_type* temp = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
    temp->add_type(new cpp_type(CPP_TYPE_STD_STRING));
    cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_VECTOR,
             new cpp_type(CPP_TYPE_STD_PAIR, temp)));
@@ -282,7 +291,7 @@ void cpp_function::emit(std::ostream &of, int level) const
       of << " const";
    of << " {";
    if(!statements_.empty())
-      emit_children<cpp_assign_stmt>(of, statements_, indent(level), ";");
+      emit_children<cpp_stmt>(of, statements_, indent(level), ";");
    of << "}";
 }
 

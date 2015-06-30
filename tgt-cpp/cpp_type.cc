@@ -50,6 +50,9 @@ std::string cpp_type::get_string() const
       case CPP_TYPE_UNSIGNED_INT:
          returnvalue += std::string("unsigned int");
          break;
+      case CPP_TYPE_BOOST_TRIBOOL:
+         returnvalue += std::string("boost::tribool");
+         break;
       case CPP_TYPE_STD_STRING:
          returnvalue += std::string("std::string");
          break;
