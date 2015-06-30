@@ -139,6 +139,7 @@ void cpp_assign_stmt::emit(std::ostream &of, int level) const
 cppClass::cppClass(const string& name, cpp_inherited_class in)
       : name_(name), in_(in)
 {
+   add_function(new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE)));
    switch(in_)
    {
       case CPP_WARPED_EVENT:

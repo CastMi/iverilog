@@ -107,7 +107,7 @@ void cpp_type::emit(std::ostream &of, int num) const
       }
       if(name_ != CPP_TYPE_NOTYPE)
          of << "> ";
-   } else
+   } else if(name_ != CPP_TYPE_NOTYPE)
       of << get_decl_string() << " ";
 }
 
