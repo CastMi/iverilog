@@ -90,6 +90,9 @@ void cpp_type::emit(std::ostream &of, int num) const
          case CPP_TYPE_SHARED_PTR:
             of << "std::shared_ptr<";
             break;
+         case CPP_TYPE_STD_MAP:
+            of << "std::map<";
+            break;
          case CPP_TYPE_STD_VECTOR:
             of << "std::vector<";
             break;

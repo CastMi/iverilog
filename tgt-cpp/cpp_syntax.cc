@@ -144,7 +144,9 @@ void cpp_assign_stmt::emit(std::ostream &of, int level) const
 cppClass::cppClass(const string& name, cpp_inherited_class in)
       : name_(name), in_(in)
 {
-   add_function(new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE)));
+   cpp_function* temp = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
+   temp->set_comment("Default constructor");
+   add_function(temp);
    switch(in_)
    {
       case CPP_WARPED_EVENT:
@@ -163,8 +165,10 @@ void cppClass::add_event_functions()
    returnType1->set_reference();
    cpp_type *returnType2 = new cpp_type(CPP_TYPE_UNSIGNED_INT);
    cpp_function *rec_name = new cpp_function("receiverName", returnType1);
+   rec_name->set_comment("Inherited getter method");
    rec_name->set_const();
    cpp_function *timestamp = new cpp_function("timestamp", returnType2);
+   timestamp->set_comment("Inherited getter method");
    timestamp->set_const();
    cpp_var *receiver_var = new cpp_var("receiver_name", new cpp_type(CPP_TYPE_STD_STRING));
    cpp_var *timestamp_var = new cpp_var("ts_", new cpp_type(CPP_TYPE_UNSIGNED_INT));
@@ -182,9 +186,8 @@ void cppClass::add_simulation_functions()
 {
    cpp_type* temp = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
    temp->add_type(new cpp_type(CPP_TYPE_STD_STRING));
-   cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_VECTOR,
-            new cpp_type(CPP_TYPE_STD_PAIR, temp)));
-   inputvar->set_comment("Inputs");
+   cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_MAP, temp));
+   inputvar->set_comment("std::map< signal_name, value >");
    add_var(inputvar);
    cpp_type *returnType = new cpp_type(CPP_TYPE_STD_VECTOR,
          new cpp_type(CPP_TYPE_SHARED_PTR,
@@ -280,9 +283,8 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
 
 void cpp_function::emit(std::ostream &of, int level) const
 {
-   // constructor doesn't have return type
-   if(type_)
-      type_->emit(of, level);
+   emit_comment(of, level);
+   type_->emit(of, level);
    of << name_ << " (";
    if(!scope_.get_decls().empty())
       emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ",", false);
@@ -304,6 +306,7 @@ void cpp_param::emit(std::ostream &of, int level) const
 
 void cpp_var::emit(std::ostream &of, int level) const
 {
-   type_->emit(of, level); 
+   emit_comment(of, level);
+   type_->emit(of, level);
    of << name_;
 }

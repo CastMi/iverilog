@@ -29,18 +29,18 @@
 
 typedef std::list<std::string> string_list_t;
 
-// Any VHDL syntax element. Each element can also contain a comment.
+// Any C++ syntax element. Each element can also contain a comment.
 //
-// Memory management is handled specially for vhdl_element subclasses:
-// The vast majority of vhdl_elements will be created during code generation
+// Memory management is handled specially for cpp_element subclasses:
+// The vast majority of cpp_elements will be created during code generation
 // and persist until after they have been printed, at which point *all*
-// vhdl_element objects should be destroyed. To support this all allocations
-// of vhdl_element subclasses call a special operator new which records
+// cpp_element objects should be destroyed. To support this all allocations
+// of cpp_element subclasses call a special operator new which records
 // the pointer allocated so we can ensure that it is disposed of when
 // the code generator completes -- by free_all_objects.
 //
 // The two big advantages of this are that we don't have to worry about
-// memory leaks of vhdl_element objects, and we can freely share pointers
+// memory leaks of cpp_element objects, and we can freely share pointers
 // between different parts of the AST.
 class cpp_element {
 public:

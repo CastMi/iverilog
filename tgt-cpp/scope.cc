@@ -581,6 +581,6 @@ int draw_scope(ivl_scope_t scope, void *_parent)
 void draw_main()
 {
    cppClass *theclass = new cppClass("EventClass", CPP_WARPED_EVENT);
-   theclass->set_comment("Create to store information about the triggered event");
+   theclass->set_comment("Created to store information about the triggered event");
    remember_event_class(theclass);
 }
