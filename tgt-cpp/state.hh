@@ -44,6 +44,7 @@ cppClass* find_class(const std::string& name);
 void emit_everything(std::ostream& os);
 void free_all_cpp_objects();
 
+cpp_context* get_context();
 cppClass *get_active_class();
 void set_active_class(cppClass *ent);
 

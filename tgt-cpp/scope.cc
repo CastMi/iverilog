@@ -580,7 +580,22 @@ int draw_scope(ivl_scope_t scope, void *_parent)
 
 void draw_main()
 {
+   // Create event class
    cppClass *theclass = new cppClass("EventClass", CPP_WARPED_EVENT);
    theclass->set_comment("Created to store information about the triggered event");
    remember_event_class(theclass);
+
+   // Create main method
+   cpp_var_ref* lhs = new cpp_var_ref("this_sim", new cpp_type(CPP_TYPE_WARPED_SIMULATION));
+   // parameters list
+   cpp_const_expr_list* rhs = new cpp_const_expr_list();
+   rhs->add_cpp_expr(new cpp_const_expr("Logic simulation", new cpp_type(CPP_TYPE_STD_STRING)));
+   rhs->add_cpp_expr(new cpp_var_ref("argc", new cpp_type(CPP_TYPE_NOTYPE)));
+   rhs->add_cpp_expr(new cpp_var_ref("argv", new cpp_type(CPP_TYPE_NOTYPE)));
+   cpp_assign_stmt* stmt = new cpp_assign_stmt(lhs, rhs, true);
+   cpp_context * main = get_context();
+   main->add_stmt(stmt);
+   // cpp_fcall_stmt * fcall = new cpp_fcall_stmt(lhs, "simulate");
+   // main->add_stmt(fcall);
 }
+

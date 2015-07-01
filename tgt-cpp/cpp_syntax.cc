@@ -20,6 +20,7 @@
 
 #include "cpp_syntax.hh"
 #include "cpp_helper.hh"
+#include "cpp_target.h"
 
 #include <cassert>
 #include <cstring>
@@ -104,7 +105,19 @@ void cpp_binop_expr::emit(std::ostream &of, int level) const
 
 void cpp_const_expr::emit(std::ostream &of, int) const
 {
-   of << "\"" << value_ << "\"";
+   switch(get_type()->get_name())
+   {
+      // Only primitive types are handled here
+      case CPP_TYPE_INT:
+      case CPP_TYPE_UNSIGNED_INT:
+         of << value_;
+         break;
+      case CPP_TYPE_STD_STRING:
+         of << "\"" << value_ << "\"";
+         break;
+      default:
+         error("This constant type is not supported");
+   }
 }
 
 void cpp_var_ref::emit(std::ostream &of, int) const
@@ -135,18 +148,34 @@ void cpp_return_stmt::emit(std::ostream &of, int level) const
 
 void cpp_assign_stmt::emit(std::ostream &of, int level) const
 {
-   assert(lhs_ && rhs_);
-   lhs_->emit(of, level);
-   of << " = ";
-   rhs_->emit(of, level);
+   if(isinstantiation)
+   {
+      lhs_->get_type()->emit(of, level);
+      lhs_->emit(of, level);
+      of << " ";
+      lhs_->get_type()->emit(of, level);
+      of << "(";
+      rhs_->emit(of, level);
+      of << ")";
+   }
+   else
+   {
+      lhs_->emit(of, level);
+      of << " = ";
+      rhs_->emit(of, level);
+   }
+}
+
+void cpp_const_expr_list::emit(std::ostream &of, int level) const
+{
+   emit_children<cpp_expr>(of, children_, indent(level), ",", false);
 }
 
 cppClass::cppClass(const string& name, cpp_inherited_class in)
       : name_(name), in_(in)
 {
-   cpp_function* temp = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
-   temp->set_comment("Default constructor");
-   add_function(temp);
+   constructor_ = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
+   constructor_->set_comment("Default constructor");
    switch(in_)
    {
       case CPP_WARPED_EVENT:
@@ -167,10 +196,12 @@ void cppClass::add_event_functions()
    cpp_function *rec_name = new cpp_function("receiverName", returnType1);
    rec_name->set_comment("Inherited getter method");
    rec_name->set_const();
+   rec_name->set_virtual();
    rec_name->set_override();
    cpp_function *timestamp = new cpp_function("timestamp", returnType2);
    timestamp->set_comment("Inherited getter method");
    timestamp->set_const();
+   timestamp->set_virtual();
    timestamp->set_override();
    cpp_var *receiver_var = new cpp_var("receiver_name", new cpp_type(CPP_TYPE_STD_STRING));
    cpp_var *timestamp_var = new cpp_var("ts_", new cpp_type(CPP_TYPE_UNSIGNED_INT));
@@ -191,6 +222,9 @@ void cppClass::add_simulation_functions()
    cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_MAP, temp));
    inputvar->set_comment("std::map< signal_name, value >");
    add_var(inputvar);
+   cpp_var *state_var = new cpp_var("state_", new cpp_type(CPP_TYPE_CUSTOM));
+   state_var->set_comment("This will become the State variable");
+   add_var(state_var);
    cpp_type *returnType = new cpp_type(CPP_TYPE_STD_VECTOR,
          new cpp_type(CPP_TYPE_SHARED_PTR,
          new cpp_type(CPP_TYPE_WARPED_EVENT)));
@@ -209,8 +243,11 @@ void cppClass::add_simulation_functions()
    // get_state
    cpp_type *get_state_ret_type = new cpp_type(CPP_TYPE_WARPED_OBJECT_STATE);
    get_state_ret_type->set_reference();
-   cpp_function *get_state_fun = new cpp_function("get_state", get_state_ret_type);
+   cpp_function *get_state_fun = new cpp_function("getState", get_state_ret_type);
+   get_state_fun->add_stmt(new cpp_return_stmt(new cpp_var_ref(
+               state_var->get_name(), state_var->get_type())));
    get_state_fun->set_override();
+   get_state_fun->set_virtual();
    // TODO: handle input.
    add_function(init_fun);
    add_function(get_state_fun);
@@ -226,9 +263,13 @@ cpp_function *cppClass::get_function(const std::string &name) const
    return retvalue;
 }
 
-cpp_function *cppClass::get_costructor()
+void cpp_context::emit(std::ostream &of, int level) const
 {
-   return get_function(name_);
+   newline(of, level);
+   of << "int main(int argc, const char** argv) {";
+   emit_children<cpp_stmt>(of, statements_, indent(level), ";");
+   newline(of, level);
+   of << "}; ";
 }
 
 void cppClass::emit(std::ostream &of, int level) const
@@ -248,6 +289,9 @@ void cppClass::emit(std::ostream &of, int level) const
    of << " {";
    newline(of, level);
    of << "public:";
+
+   newline(of, indent(level));
+   constructor_->emit(of, indent(level));
 
    if (!scope_.empty()) {
       newline(of, indent(level));
@@ -306,13 +350,6 @@ void cpp_function::emit(std::ostream &of, int level) const
    if(!statements_.empty())
       emit_children<cpp_stmt>(of, statements_, indent(level), ";");
    of << "}";
-}
-
-void cpp_param::emit(std::ostream &of, int level) const
-{
-   of << "const ";
-   type_->emit(of, level);
-   of << name_;
 }
 
 void cpp_var::emit(std::ostream &of, int level) const

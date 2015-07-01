@@ -41,6 +41,9 @@ std::string cpp_type::get_string() const
        case CPP_TYPE_WARPED_OBJECT_STATE:
          returnvalue += "warped::ObjectState";
          break;
+       case CPP_TYPE_WARPED_SIMULATION:
+         returnvalue += "warped::Simulation";
+         break;
        case CPP_TYPE_CUSTOM:
          returnvalue += std::string("myCustomType");
          break;

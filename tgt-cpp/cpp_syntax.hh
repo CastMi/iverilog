@@ -125,6 +125,22 @@ private:
    cpp_expr *operand_;
 };
 
+/*
+ * Used, for example, when you instantiate an object.
+ * It should contain only const_expr and var_ref.
+ */
+class cpp_const_expr_list : public cpp_expr {
+public:
+   cpp_const_expr_list() : cpp_expr(new cpp_type(CPP_TYPE_NOTYPE)){}
+   ~cpp_const_expr_list() {};
+
+   void add_cpp_expr(cpp_expr* el) { children_.push_back(el); };
+   void emit(std::ostream &of, int level) const;
+
+private:
+   std::list<cpp_expr*> children_;
+};
+
 class cpp_const_expr : public cpp_expr {
 public:
    cpp_const_expr(const char *op, cpp_type *type)
@@ -187,21 +203,6 @@ public:
 };
 
 /*
- * A parameter of a module.
- * It becomes a parameter of the constructor of the class.
- */
-class cpp_param : public cpp_decl {
-public:
-   cpp_param(const char *name, cpp_type *type, bool needSetter = false)
-      : cpp_decl(name, type), needSetter_(needSetter) {}
-   void emit(std::ostream &of, int level) const;
-   assign_type_t assignment_type() const { return ASSIGN_CONST; }
-
-private:
-   bool needSetter_;
-};
-
-/*
  * Contains a list of declarations in a hierarchy.
  */
 class cpp_scope {
@@ -239,6 +240,25 @@ public:
    virtual void emit(std::ostream &of, int level = 0) const = 0;
 };
 
+/*
+ * A function call statement
+ */
+class cpp_fcall_stmt : public cpp_stmt {
+public:
+   cpp_fcall_stmt(cpp_var_ref * base, const std::string& fun_name)
+      : base_(base), fun_name_(fun_name) {}
+   virtual ~cpp_fcall_stmt() {};
+
+   virtual void emit(std::ostream &of, int level = 0) const;
+   virtual void add_param(cpp_expr* el) { parameters_.push_back(el); };
+
+protected:
+   cpp_var_ref *base_;
+   // The parameters could be constant or reference to variable
+   std::list<cpp_expr*> parameters_;
+   std::string fun_name_;
+};
+
 class cpp_return_stmt : public cpp_stmt {
 public:
    cpp_return_stmt(cpp_var_ref *value)
@@ -253,15 +273,17 @@ protected:
 
 class cpp_assign_stmt : public cpp_stmt {
 public:
-   cpp_assign_stmt(cpp_var_ref *lhs, cpp_expr *rhs)
-      : lhs_(lhs), rhs_(rhs) {}
+   cpp_assign_stmt(cpp_var_ref *lhs, cpp_expr *rhs,
+         bool instantiation = false)
+      : lhs_(lhs), rhs_(rhs), isinstantiation(instantiation) {}
    virtual ~cpp_assign_stmt() {};
 
    virtual void emit(std::ostream &of, int level = 0) const;
 
 protected:
-   cpp_var_ref *lhs_;
+   cpp_expr *lhs_;
    cpp_expr *rhs_;
+   bool isinstantiation;
 };
 
 /*
@@ -270,10 +292,7 @@ protected:
  */
 class cpp_procedural {
 public:
-   cpp_procedural(bool constant = false, bool overridesomething = false,
-         bool virtualfun = false)
-      : isconst(constant), isoverride(overridesomething),
-        isvirtual(virtualfun) {}
+   cpp_procedural() : isconst(false), isoverride(false), isvirtual(false) {}
    virtual ~cpp_procedural() {}
 
    virtual cpp_scope *get_scope() { return &scope_; }
@@ -288,12 +307,25 @@ protected:
    bool isconst, isoverride, isvirtual;
 };
 
+/*
+ * This class contains the main function
+ */
+class cpp_context {
+public:
+   cpp_context() {}
+
+   void emit(std::ostream &of, int level = 0) const;
+   void add_stmt(cpp_stmt* el) { statements_.push_back(el); };
+
+private:
+   std::list<cpp_stmt*> statements_;
+};
 
 class cpp_function : public cpp_decl, public cpp_procedural {
 public:
    cpp_function(const char *name, cpp_type *ret_type,
-         bool constant = false, bool overridesomething = false)
-      : cpp_decl(name, ret_type), cpp_procedural(constant, overridesomething)
+         bool constructor = false)
+      : cpp_decl(name, ret_type), isconstructor(constructor)
    {
       // A function contains two scopes:
       // scope_ = The parameters
@@ -309,6 +341,7 @@ public:
 private:
    // Local vars
    cpp_scope variables_;
+   bool isconstructor;
 };
 
 enum cpp_inherited_class {
@@ -330,13 +363,14 @@ public:
    void add_function(cpp_function* fun) { scope_.add_decl(fun); };
 
    cpp_scope *get_scope() { return &scope_; }
-   cpp_function *get_costructor();
+   cpp_function *get_costructor() { return constructor_; };
    cpp_function *get_function(const std::string &name) const;
 
 private:
    void add_simulation_functions();
    void add_event_functions();
 
+   cpp_function* constructor_;
    // Class name
    std::string name_;
    cpp_scope scope_;

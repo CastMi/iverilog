@@ -63,6 +63,14 @@ static cppClass *g_active_class = NULL;
 typedef vector<ivl_scope_t> default_scopes_t;
 static default_scopes_t g_default_scopes;
 
+// There is one and only one context
+static cpp_context *context = new cpp_context();
+
+cpp_context* get_context()
+{
+   return context;
+}
+
 // True if signal `sig' has already been encountered by the code
 // generator. This means we have already assigned it to a C++
 // object and possibly renamed it.
@@ -208,6 +216,7 @@ void emit_everything(std::ostream& os)
       // emit_implementation(outfile);
       (*it)->emit(os);
    }
+   context->emit(os);
 }
 
 // Release all memory for the C++ objects.
