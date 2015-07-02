@@ -431,7 +431,7 @@ static void create_skeleton_class_for(ivl_scope_t scope)
       // FIXME: here there should be a switch based on
       // parameter type.
       // Right now, everything is an int
-      cpp_function* constructor = theClass->get_costructor();
+      cpp_procedural* constructor = theClass->get_costructor();
       constructor->add_param(new cpp_var(ivl_parameter_basename(param),
               new cpp_type(CPP_TYPE_INT)));
    }
@@ -588,7 +588,7 @@ void draw_main()
    // Create main method
    cpp_var_ref* lhs = new cpp_var_ref("this_sim", new cpp_type(CPP_TYPE_WARPED_SIMULATION));
    // parameters list
-   cpp_const_expr_list* rhs = new cpp_const_expr_list();
+   cpp_expr_list* rhs = new cpp_expr_list();
    rhs->add_cpp_expr(new cpp_const_expr("Logic simulation", new cpp_type(CPP_TYPE_STD_STRING)));
    rhs->add_cpp_expr(new cpp_var_ref("argc", new cpp_type(CPP_TYPE_NOTYPE)));
    rhs->add_cpp_expr(new cpp_var_ref("argv", new cpp_type(CPP_TYPE_NOTYPE)));

@@ -25,6 +25,34 @@
 #include <sstream>
 #include <iostream>
 
+static std::string tostring(cpp_type_name_t type)
+{
+   switch(type)
+   {
+      case CPP_TYPE_WARPED_EVENT:
+         return std::string("warped::Event");
+       case CPP_TYPE_WARPED_OBJECT_STATE:
+         return std::string("warped::ObjectState");
+       case CPP_TYPE_WARPED_SIMULATION_OBJECT:
+         return std::string("warped::SimulationObject");
+       case CPP_TYPE_WARPED_SIMULATION:
+         return std::string("warped::Simulation");
+       case CPP_TYPE_CUSTOM:
+         return std::string("myCustomType");
+      case CPP_TYPE_INT:
+         return std::string("int");
+      case CPP_TYPE_UNSIGNED_INT:
+         return std::string("unsigned int");
+      case CPP_TYPE_BOOST_TRIBOOL:
+         return std::string("boost::tribool");
+      case CPP_TYPE_STD_STRING:
+         return std::string("std::string");
+      default:
+          error("Unhandled type");
+          return std::string("");
+   }
+}
+
 /*
  * This is just the name of the type, without any parameters.
  */
@@ -43,6 +71,9 @@ std::string cpp_type::get_string() const
          break;
        case CPP_TYPE_WARPED_SIMULATION:
          returnvalue += "warped::Simulation";
+         break;
+       case CPP_TYPE_WARPED_SIMULATION_OBJECT:
+         returnvalue += "warped::SimulationObject";
          break;
        case CPP_TYPE_CUSTOM:
          returnvalue += std::string("myCustomType");

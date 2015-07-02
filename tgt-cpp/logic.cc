@@ -49,7 +49,7 @@ static cpp_expr *input_to_expr(cpp_scope *scope, cpp_unaryop_t op,
    ivl_nexus_t input = ivl_logic_pin(log, 1);
    assert(input);
 
-   cpp_expr *operand = readable_ref(scope, input);
+   cpp_var_ref *operand = readable_ref(scope, input);
    return new cpp_unaryop_expr(op, operand, new cpp_type(CPP_TYPE_INT));
 }
 
@@ -110,7 +110,7 @@ void draw_logic(cppClass *theclass, ivl_net_logic_t log)
          cpp_expr *rhs = translate_logic_inputs(theclass->get_scope(), log);
          cpp_assign_stmt *ass = new cpp_assign_stmt(lhs, rhs);
 
-         cpp_function* fun = theclass->get_function(WARPED_HANDLE_EVENT_FUN_NAME);
+         cpp_procedural* fun = theclass->get_function(WARPED_HANDLE_EVENT_FUN_NAME);
          fun->add_stmt(ass);
       }
    }

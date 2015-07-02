@@ -120,9 +120,12 @@ void cpp_const_expr::emit(std::ostream &of, int) const
    }
 }
 
-void cpp_var_ref::emit(std::ostream &of, int) const
+void cpp_var_ref::emit(std::ostream &of, int level) const
 {
-   of << name_;
+   if(!name_.empty())
+      of << name_;
+   else
+      type_->emit(of, level);
 }
 
 void cpp_expr::open_parens(std::ostream& of)
@@ -148,12 +151,10 @@ void cpp_return_stmt::emit(std::ostream &of, int level) const
 
 void cpp_assign_stmt::emit(std::ostream &of, int level) const
 {
-   if(isinstantiation)
+   if(is_instantiation)
    {
       lhs_->get_type()->emit(of, level);
       lhs_->emit(of, level);
-      of << " ";
-      lhs_->get_type()->emit(of, level);
       of << "(";
       rhs_->emit(of, level);
       of << ")";
@@ -166,16 +167,19 @@ void cpp_assign_stmt::emit(std::ostream &of, int level) const
    }
 }
 
-void cpp_const_expr_list::emit(std::ostream &of, int level) const
+void cpp_expr_list::emit(std::ostream &of, int level) const
 {
-   emit_children<cpp_expr>(of, children_, indent(level), ",", false);
+   if(!children_.empty())
+      emit_children<cpp_expr>(of, children_, indent(level), ",", false);
 }
 
 cppClass::cppClass(const string& name, cpp_inherited_class in)
       : name_(name), in_(in)
 {
-   constructor_ = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
-   constructor_->set_comment("Default constructor");
+   cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
+   constr->set_constructor();
+   constr->set_comment("Default constructor");
+   add_function(constr);
    switch(in_)
    {
       case CPP_WARPED_EVENT:
@@ -189,11 +193,11 @@ cppClass::cppClass(const string& name, cpp_inherited_class in)
 
 void cppClass::add_event_functions()
 {
-   cpp_type* returnType1 = new cpp_type(CPP_TYPE_STD_STRING);
-   returnType1->set_const();
-   returnType1->set_reference();
+   cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
+   const_ref_string_type->set_const();
+   const_ref_string_type->set_reference();
    cpp_type *returnType2 = new cpp_type(CPP_TYPE_UNSIGNED_INT);
-   cpp_function *rec_name = new cpp_function("receiverName", returnType1);
+   cpp_function *rec_name = new cpp_function("receiverName", const_ref_string_type);
    rec_name->set_comment("Inherited getter method");
    rec_name->set_const();
    rec_name->set_virtual();
@@ -209,10 +213,15 @@ void cppClass::add_event_functions()
    add_var(timestamp_var);
    add_function(rec_name);
    add_function(timestamp);
-   timestamp->add_stmt(new cpp_return_stmt(new cpp_var_ref(
-               timestamp_var->get_name(), timestamp_var->get_type())));
-   rec_name->add_stmt(new cpp_return_stmt(new cpp_var_ref(
-               receiver_var->get_name(), receiver_var->get_type())));
+   timestamp->add_stmt(new cpp_return_stmt(timestamp_var->get_ref()));
+   rec_name->add_stmt(new cpp_return_stmt(receiver_var->get_ref()));
+   // add init list to constructor.
+   cpp_function* constr = get_costructor();
+   cpp_var *name = new cpp_var("name", const_ref_string_type);
+   constr->add_param(name);
+   cpp_fcall_stmt* init_name = new cpp_fcall_stmt(receiver_var->get_ref(), "");
+   init_name->add_param(name->get_ref());
+   constr->add_init(init_name);
 }
 
 void cppClass::add_simulation_functions()
@@ -244,17 +253,24 @@ void cppClass::add_simulation_functions()
    cpp_type *get_state_ret_type = new cpp_type(CPP_TYPE_WARPED_OBJECT_STATE);
    get_state_ret_type->set_reference();
    cpp_function *get_state_fun = new cpp_function("getState", get_state_ret_type);
-   get_state_fun->add_stmt(new cpp_return_stmt(new cpp_var_ref(
-               state_var->get_name(), state_var->get_type())));
+   get_state_fun->add_stmt(new cpp_return_stmt(state_var->get_ref()));
    get_state_fun->set_override();
    get_state_fun->set_virtual();
    // TODO: handle input.
    add_function(init_fun);
    add_function(get_state_fun);
    add_function(event_handler);
+   // add init list to constructor.
+   cpp_function* constr = get_costructor();
+   cpp_var *name = new cpp_var("name", new cpp_type(CPP_TYPE_NOTYPE));
+   constr->add_param(name);
+   cpp_var_ref* sim_obj = new cpp_var_ref("", new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT));
+   cpp_fcall_stmt* init_name = new cpp_fcall_stmt(sim_obj, "");
+   init_name->add_param(name->get_ref());
+   constr->add_init(init_name);
 }
 
-cpp_function *cppClass::get_function(const std::string &name) const
+cpp_function* cppClass::get_function(const std::string &name) const
 {
    cpp_decl* temp = scope_.get_decl(name);
    assert(temp);
@@ -290,9 +306,6 @@ void cppClass::emit(std::ostream &of, int level) const
    newline(of, level);
    of << "public:";
 
-   newline(of, indent(level));
-   constructor_->emit(of, indent(level));
-
    if (!scope_.empty()) {
       newline(of, indent(level));
       emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ";");
@@ -309,12 +322,6 @@ const cpp_type *cpp_decl::get_type() const
    return type_;
 }
 
-// True if char is not '1' or '0'
-static bool is_meta_bit(char c)
-{
-   return c != '1' && c != '0';
-}
-
 void cpp_unaryop_expr::emit(std::ostream &of, int level) const
 {
    open_parens(of);
@@ -323,6 +330,15 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
    case CPP_UNARYOP_NOT:
        of << "not ";
       break;
+   case CPP_UNARYOP_LITERAL:
+      operand_->emit(of, level);
+      break;
+   case CPP_UNARYOP_NEW:
+      of << "new ";
+      // FIXME
+      operand_->get_type()->emit(of, level),
+      operand_->emit(of, level);
+      break;
    case CPP_UNARYOP_NEG:
        of << "-";
       break;
@@ -330,6 +346,14 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
    operand_->emit(of, level);
 
    close_parens(of);
+}
+
+void cpp_fcall_stmt::emit(std::ostream &of, int level) const
+{
+   base_->emit(of, level);
+   of << "(";
+   parameters_->emit(of, level);
+   of << ")";
 }
 
 void cpp_function::emit(std::ostream &of, int level) const
@@ -346,10 +370,22 @@ void cpp_function::emit(std::ostream &of, int level) const
       of << " const";
    if(isoverride)
       of << " override";
+   if(isconstructor)
+   {
+      of << " : ";
+      emit_children<cpp_fcall_stmt>(of, init_list_, indent(level), ",", false);
+   }
    of << " {";
    if(!statements_.empty())
       emit_children<cpp_stmt>(of, statements_, indent(level), ";");
    of << "}";
+}
+
+cpp_var_ref* cpp_var::get_ref()
+{
+   if(ref_to_this_var == NULL)
+      ref_to_this_var = new cpp_var_ref(name_, type_);
+   return ref_to_this_var;
 }
 
 void cpp_var::emit(std::ostream &of, int level) const

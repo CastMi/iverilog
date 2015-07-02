@@ -34,6 +34,7 @@ enum cpp_type_name_t {
    CPP_TYPE_WARPED_EVENT,
    CPP_TYPE_WARPED_OBJECT_STATE,
    CPP_TYPE_WARPED_SIMULATION,
+   CPP_TYPE_WARPED_SIMULATION_OBJECT,
    // templates
    CPP_TYPE_SHARED_PTR,
    CPP_TYPE_STD_MAP,
@@ -61,6 +62,8 @@ public:
    void set_const() { isconst = true; }
    void set_reference() { isreference = true; }
    void add_type(cpp_type* el) { base_.push_front(el); }
+
+   static std::string tostring(cpp_type_name_t);
 
 protected:
    cpp_type_name_t name_;
