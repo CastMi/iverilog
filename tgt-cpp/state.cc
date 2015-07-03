@@ -207,6 +207,7 @@ void remember_class(cppClass* theclass, ivl_scope_t scope)
 // Print all C++ classes, in order, to the specified output stream.
 void emit_everything(std::ostream& os)
 {
+   context->emit_before_classes(os);
    for (entity_list_t::iterator it = g_classes.begin();
         it != g_classes.end();
         ++it) {
@@ -216,7 +217,7 @@ void emit_everything(std::ostream& os)
       // emit_implementation(outfile);
       (*it)->emit(os);
    }
-   context->emit(os);
+   context->emit_after_classes(os);
 }
 
 // Release all memory for the C++ objects.

@@ -27,6 +27,7 @@
 enum cpp_type_name_t {
    CPP_TYPE_BOOST_TRIBOOL,
    CPP_TYPE_CUSTOM,
+   CPP_TYPE_ELEMENT_STATE,
    CPP_TYPE_INT,
    CPP_TYPE_NOTYPE,
    CPP_TYPE_STD_STRING,
@@ -52,7 +53,7 @@ public:
       if(base != NULL)
          base_.push_back(base);
    }
-   virtual ~cpp_type();
+   virtual ~cpp_type() {};
 
    void emit(std::ostream &of, int level) const;
    cpp_type_name_t get_name() const { return name_; }

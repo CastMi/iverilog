@@ -25,7 +25,7 @@
 #include <sstream>
 #include <iostream>
 
-static std::string tostring(cpp_type_name_t type)
+std::string cpp_type::tostring(cpp_type_name_t type)
 {
    switch(type)
    {
@@ -39,6 +39,8 @@ static std::string tostring(cpp_type_name_t type)
          return std::string("warped::Simulation");
        case CPP_TYPE_CUSTOM:
          return std::string("myCustomType");
+       case CPP_TYPE_ELEMENT_STATE:
+         return std::string("ElementState");
       case CPP_TYPE_INT:
          return std::string("int");
       case CPP_TYPE_UNSIGNED_INT:
@@ -74,6 +76,9 @@ std::string cpp_type::get_string() const
          break;
        case CPP_TYPE_WARPED_SIMULATION_OBJECT:
          returnvalue += "warped::SimulationObject";
+         break;
+       case CPP_TYPE_ELEMENT_STATE:
+         returnvalue += "ElementState";
          break;
        case CPP_TYPE_CUSTOM:
          returnvalue += std::string("myCustomType");
@@ -149,9 +154,5 @@ void cpp_type::emit(std::ostream &of, int num) const
          of << "> ";
    } else if(name_ != CPP_TYPE_NOTYPE)
       of << get_decl_string() << " ";
-}
-
-cpp_type::~cpp_type()
-{
 }
 

@@ -595,7 +595,5 @@ void draw_main()
    cpp_assign_stmt* stmt = new cpp_assign_stmt(lhs, rhs, true);
    cpp_context * main = get_context();
    main->add_stmt(stmt);
-   // cpp_fcall_stmt * fcall = new cpp_fcall_stmt(lhs, "simulate");
-   // main->add_stmt(fcall);
 }
 

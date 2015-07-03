@@ -231,7 +231,7 @@ void cppClass::add_simulation_functions()
    cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_MAP, temp));
    inputvar->set_comment("std::map< signal_name, value >");
    add_var(inputvar);
-   cpp_var *state_var = new cpp_var("state_", new cpp_type(CPP_TYPE_CUSTOM));
+   cpp_var *state_var = new cpp_var("state_", new cpp_type(CPP_TYPE_ELEMENT_STATE));
    state_var->set_comment("This will become the State variable");
    add_var(state_var);
    cpp_type *returnType = new cpp_type(CPP_TYPE_STD_VECTOR,
@@ -262,7 +262,10 @@ void cppClass::add_simulation_functions()
    add_function(event_handler);
    // add init list to constructor.
    cpp_function* constr = get_costructor();
-   cpp_var *name = new cpp_var("name", new cpp_type(CPP_TYPE_NOTYPE));
+   cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
+   const_ref_string_type->set_const();
+   const_ref_string_type->set_reference();
+   cpp_var *name = new cpp_var("name", const_ref_string_type);
    constr->add_param(name);
    cpp_var_ref* sim_obj = new cpp_var_ref("", new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT));
    cpp_fcall_stmt* init_name = new cpp_fcall_stmt(sim_obj, "");
@@ -279,13 +282,23 @@ cpp_function* cppClass::get_function(const std::string &name) const
    return retvalue;
 }
 
-void cpp_context::emit(std::ostream &of, int level) const
+void cpp_context::emit_after_classes(std::ostream &of, int level) const
 {
    newline(of, level);
    of << "int main(int argc, const char** argv) {";
    emit_children<cpp_stmt>(of, statements_, indent(level), ";");
    newline(of, level);
    of << "}; ";
+}
+
+void cpp_context::emit_before_classes(std::ostream &of, int level) const
+{
+   newline(of, level);
+   of << "WARPED_DEFINE_OBJECT_STATE_STRUCT(" << cpp_type::tostring(CPP_TYPE_ELEMENT_STATE) << "){";
+   if(!elem_parts_.empty())
+      emit_children<cpp_var>(of, elem_parts_, indent(level), ";");
+   of << "};";
+   newline(of, level);
 }
 
 void cppClass::emit(std::ostream &of, int level) const

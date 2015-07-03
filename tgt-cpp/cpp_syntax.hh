@@ -311,10 +311,15 @@ class cpp_context {
 public:
    cpp_context() {}
 
-   void emit(std::ostream &of, int level = 0) const;
+   void emit_after_classes(std::ostream &of, int level = 0) const;
+   void emit_before_classes(std::ostream &of, int level = 0) const;
    void add_stmt(cpp_stmt* el) { statements_.push_back(el); };
+   void add_var_to_state(cpp_var* el) { elem_parts_.push_back(el); };
 
 private:
+   // the macro that define the state
+   std::list<cpp_var*> elem_parts_;
+   // statements inside the main
    std::list<cpp_stmt*> statements_;
 };
 
