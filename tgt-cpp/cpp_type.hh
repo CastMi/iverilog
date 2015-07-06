@@ -26,7 +26,7 @@
 
 enum cpp_type_name_t {
    CPP_TYPE_BOOST_TRIBOOL,
-   CPP_TYPE_CUSTOM,
+   CPP_TYPE_CUSTOM_EVENT,
    CPP_TYPE_ELEMENT_STATE,
    CPP_TYPE_INT,
    CPP_TYPE_NOTYPE,
@@ -48,20 +48,21 @@ public:
    // Scalar constructors
    cpp_type(cpp_type_name_t name, cpp_type *base = NULL,
          bool constant = false, bool reference = false)
-      : name_(name), isconst(constant), isreference(reference)
+      : name_(name), isconst(constant), isreference(reference), isiterator(false)
    {
       if(base != NULL)
          base_.push_back(base);
    }
    virtual ~cpp_type() {};
 
-   void emit(std::ostream &of, int level) const;
+   void emit(std::ostream &of, int level = 0) const;
    cpp_type_name_t get_name() const { return name_; }
    std::string get_string() const;
    std::string get_decl_string() const;
    std::string get_type_decl_string() const;
    void set_const() { isconst = true; }
    void set_reference() { isreference = true; }
+   void set_iterator() { isiterator = true; }
    void add_type(cpp_type* el) { base_.push_front(el); }
 
    static std::string tostring(cpp_type_name_t);
@@ -71,7 +72,7 @@ protected:
    // the following field should be not empty if and only if the
    // "name_" field has a value of a template.
    std::list<cpp_type*> base_;
-   bool isconst, isreference;
+   bool isconst, isreference, isiterator;
 };
 
 #endif

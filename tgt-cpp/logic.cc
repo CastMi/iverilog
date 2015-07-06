@@ -50,7 +50,7 @@ static cpp_expr *input_to_expr(cpp_scope *scope, cpp_unaryop_t op,
    assert(input);
 
    cpp_var_ref *operand = readable_ref(scope, input);
-   return new cpp_unaryop_expr(op, operand, new cpp_type(CPP_TYPE_INT));
+   return new cpp_unaryop_expr(op, operand, operand->get_type());
 }
 
 static cpp_expr *translate_logic_inputs(cpp_scope *scope, ivl_net_logic_t log)
@@ -79,7 +79,7 @@ static cpp_expr *translate_logic_inputs(cpp_scope *scope, ivl_net_logic_t log)
    case IVL_LO_PULLDOWN:
       return new cpp_const_expr("0", new cpp_type(CPP_TYPE_INT));
    default:
-      return new cpp_const_expr("NULL", new cpp_type(CPP_TYPE_CUSTOM));
+      return new cpp_const_expr("NULL", new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT));
       /*
       error("Don't know how to translate type %d to expression",
             ivl_logic_type(log));

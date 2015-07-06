@@ -37,8 +37,8 @@ std::string cpp_type::tostring(cpp_type_name_t type)
          return std::string("warped::SimulationObject");
        case CPP_TYPE_WARPED_SIMULATION:
          return std::string("warped::Simulation");
-       case CPP_TYPE_CUSTOM:
-         return std::string("myCustomType");
+       case CPP_TYPE_CUSTOM_EVENT:
+         return std::string(CUSTOM_EVENT_CLASS_NAME);
        case CPP_TYPE_ELEMENT_STATE:
          return std::string("ElementState");
       case CPP_TYPE_INT:
@@ -74,14 +74,14 @@ std::string cpp_type::get_string() const
        case CPP_TYPE_WARPED_SIMULATION:
          returnvalue += "warped::Simulation";
          break;
+       case CPP_TYPE_CUSTOM_EVENT:
+         returnvalue += CUSTOM_EVENT_CLASS_NAME;
+         break;
        case CPP_TYPE_WARPED_SIMULATION_OBJECT:
          returnvalue += "warped::SimulationObject";
          break;
        case CPP_TYPE_ELEMENT_STATE:
          returnvalue += "ElementState";
-         break;
-       case CPP_TYPE_CUSTOM:
-         returnvalue += std::string("myCustomType");
          break;
       case CPP_TYPE_INT:
          returnvalue += std::string("int");
@@ -151,8 +151,10 @@ void cpp_type::emit(std::ostream &of, int num) const
             of << ", ";
       }
       if(name_ != CPP_TYPE_NOTYPE)
-         of << "> ";
+         of << ">";
+      if(isiterator)
+         of << "::iterator";
    } else if(name_ != CPP_TYPE_NOTYPE)
-      of << get_decl_string() << " ";
+      of << get_decl_string();
 }
 

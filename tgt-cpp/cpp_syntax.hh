@@ -31,17 +31,27 @@ using namespace std;
 
 #define WARPED_INIT_EVENT_FUN_NAME "createInitialEvents"
 #define WARPED_HANDLE_EVENT_FUN_NAME "receiveEvent"
+#define CUSTOM_EVENT_CLASS_NAME "EventClass"
 
 class cpp_scope;
 class cppClass;
 
-class cpp_expr : public cpp_element {
+class cpp_stmt {
+public:
+   cpp_stmt() {};
+   virtual ~cpp_stmt() {};
+
+   virtual void emit(std::ostream &of, int level = 0) const = 0;
+};
+
+class cpp_expr : public cpp_element, public cpp_stmt {
 public:
     cpp_expr(const cpp_type* type)
       : type_(type) {}
    virtual ~cpp_expr() {};
 
    const cpp_type *get_type() const { return type_; }
+   virtual void emit(std::ostream &of, int level = 0) const = 0;
 
 protected:
    static void open_parens(ostream& of);
@@ -53,6 +63,8 @@ protected:
 
 enum cpp_binop_t {
    CPP_BINOP_AND,
+   CPP_BINOP_NEQ,
+   CPP_BINOP_EQ,
    CPP_BINOP_OR,
    CPP_BINOP_ADD,
    CPP_BINOP_SUB,
@@ -75,7 +87,7 @@ public:
       : cpp_expr(type), name_(name) {}
    ~cpp_var_ref() {};
 
-   void emit(std::ostream &of, int level) const;
+   void emit(std::ostream &of, int level = 0) const;
    const std::string &get_name() const { return name_; }
    void set_name(const std::string &name) { name_ = name; }
 
@@ -111,7 +123,10 @@ private:
 
 enum cpp_unaryop_t {
    CPP_UNARYOP_NOT,
-   CPP_UNARYOP_NEW,
+   CPP_UNARYOP_ADD,
+   CPP_UNARYOP_RETURN,
+   CPP_UNARYOP_DECL,
+   CPP_UNARYOP_STATIC_CAST,
    CPP_UNARYOP_LITERAL,
    CPP_UNARYOP_NEG
 };
@@ -119,7 +134,7 @@ enum cpp_unaryop_t {
 class cpp_unaryop_expr : public cpp_expr {
 public:
    cpp_unaryop_expr(cpp_unaryop_t op, cpp_var_ref *operand,
-                      cpp_type *type)
+      const cpp_type *type)
       : cpp_expr(type), op_(op), operand_(operand) {}
    ~cpp_unaryop_expr() {};
 
@@ -228,21 +243,14 @@ private:
    cpp_scope *parent_;
 };
 
-class cpp_stmt {
-public:
-   cpp_stmt() {};
-   virtual ~cpp_stmt() {};
-
-   virtual void emit(std::ostream &of, int level = 0) const = 0;
-};
 
 /*
  * A function call statement
  */
-class cpp_fcall_stmt : public cpp_stmt {
+class cpp_fcall_stmt : public cpp_expr {
 public:
-   cpp_fcall_stmt(cpp_var_ref * base, const std::string& fun_name)
-      : base_(base), fun_name_(fun_name)
+   cpp_fcall_stmt(const cpp_type* ret_type, cpp_var_ref * base, const std::string& fun_name)
+      : cpp_expr(ret_type), base_(base), fun_name_(fun_name)
    {
       parameters_ = new cpp_expr_list();
    }
@@ -258,23 +266,33 @@ protected:
    std::string fun_name_;
 };
 
-class cpp_return_stmt : public cpp_stmt {
+/*
+ * A cycle
+ */
+class cpp_for : public cpp_stmt {
 public:
-   cpp_return_stmt(cpp_var_ref *value)
-      : value_(value) {}
-   virtual ~cpp_return_stmt() {};
+   cpp_for(cpp_expr * condition) : condition_(condition) {};
+   cpp_for() : condition_(NULL) {};
+   ~cpp_for() {};
 
    virtual void emit(std::ostream &of, int level = 0) const;
+   void add_to_body(cpp_expr* item) { statements_.push_back(item); };
+   void add_precycle(cpp_expr* p) { precycle_.push_back(p); }
+   void set_condition(cpp_expr* p);
+   void add_postcycle(cpp_expr* p) { postcycle_.push_back(p); }
 
-protected:
-   cpp_var_ref *value_;
+private:
+   cpp_expr* condition_;
+   std::list<cpp_expr*> precycle_;
+   std::list<cpp_expr*> postcycle_;
+   std::list<cpp_stmt*> statements_;
 };
 
-class cpp_assign_stmt : public cpp_stmt {
+class cpp_assign_stmt : public cpp_expr {
 public:
    cpp_assign_stmt(cpp_expr *lhs, cpp_expr *rhs,
          bool instantiation = false)
-      : lhs_(lhs), rhs_(rhs), is_instantiation(instantiation) {}
+      : cpp_expr(lhs->get_type()), lhs_(lhs), rhs_(rhs), is_instantiation(instantiation) {}
    virtual ~cpp_assign_stmt() {};
 
    virtual void emit(std::ostream &of, int level = 0) const;
@@ -310,6 +328,7 @@ protected:
 class cpp_context {
 public:
    cpp_context() {}
+   ~cpp_context() {}
 
    void emit_after_classes(std::ostream &of, int level = 0) const;
    void emit_before_classes(std::ostream &of, int level = 0) const;
@@ -351,9 +370,10 @@ private:
    bool isconst, isvirtual, isoverride, isconstructor;
 };
 
-enum cpp_inherited_class {
-   CPP_WARPED_EVENT,
-   CPP_WARPED_SIM_OBJ
+enum cpp_class_type {
+   CPP_CLASS_WARPED_EVENT,
+   CPP_CLASS_AND,
+   CPP_CLASS_WARPED_SIM_OBJ
 };
 
 /*
@@ -361,13 +381,14 @@ enum cpp_inherited_class {
  */
 class cppClass : public cpp_element {
 public:
-   cppClass(const string& name, cpp_inherited_class in = CPP_WARPED_SIM_OBJ);
+   cppClass(const string& name, cpp_class_type in = CPP_CLASS_WARPED_SIM_OBJ);
    virtual ~cppClass() {};
 
    void emit(std::ostream &of, int level = 0) const;
    const std::string &get_name() const { return name_; }
    void add_var(cpp_var *item) { scope_.add_decl(item); }
    void add_function(cpp_procedural* fun) { scope_.add_decl(fun); };
+   cpp_class_type get_type() const { return type_; };
 
    cpp_scope *get_scope() { return &scope_; }
    cpp_function* get_costructor() { return get_function(name_); };
@@ -380,7 +401,7 @@ private:
    // Class name
    std::string name_;
    cpp_scope scope_;
-   cpp_inherited_class in_;
+   cpp_class_type type_;
 };
 
 typedef std::list<cppClass*> entity_list_t;

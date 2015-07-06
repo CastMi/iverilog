@@ -82,24 +82,40 @@ int cpp_expr::paren_levels(0);
 
 void cpp_binop_expr::emit(std::ostream &of, int level) const
 {
+   if(operands_.empty())
+      return;
    open_parens(of);
-
-   assert(! operands_.empty());
    std::list<cpp_expr*>::const_iterator it = operands_.begin();
 
    (*it)->emit(of, level);
-   while (++it != operands_.end()) {
-      const char* ops[] = {
-         "and", "or", "=", "/=", "+", "-", "*", "<",
-         ">", "<=", ">=", "sll", "srl", "xor", "&",
-          "nand", "nor", "xnor", "/", "mod", "**", "sra", NULL
-      };
-
-      of << " " << ops[op_] << " ";
-
-       (*it)->emit(of, level);
+   while(++it != operands_.end())
+   {
+      of << " ";
+      switch(op_)
+      {
+         case CPP_BINOP_EQ:
+            of << "==";
+            break;
+         case CPP_BINOP_AND:
+            of << "and";
+            break;
+         case CPP_BINOP_OR:
+            of << "or";
+            break;
+         case CPP_BINOP_NEQ:
+            of << "!=";
+            break;
+         case CPP_BINOP_ADD:
+            of << "+";
+            break;
+         case CPP_BINOP_SUB:
+            of << "-";
+            break;
+         default:
+            error("This binary operation is not supported");
+      }
+      (*it)->emit(of, level);
    }
-
    close_parens(of);
 }
 
@@ -122,6 +138,7 @@ void cpp_const_expr::emit(std::ostream &of, int) const
 
 void cpp_var_ref::emit(std::ostream &of, int level) const
 {
+   of << " ";
    if(!name_.empty())
       of << name_;
    else
@@ -142,18 +159,10 @@ void cpp_expr::close_parens(std::ostream& of)
       of << ")";
 }
 
-void cpp_return_stmt::emit(std::ostream &of, int level) const
-{
-   assert(value_);
-   of << "return ";
-   value_->emit(of, level);
-}
-
 void cpp_assign_stmt::emit(std::ostream &of, int level) const
 {
    if(is_instantiation)
    {
-      lhs_->get_type()->emit(of, level);
       lhs_->emit(of, level);
       of << "(";
       rhs_->emit(of, level);
@@ -162,7 +171,7 @@ void cpp_assign_stmt::emit(std::ostream &of, int level) const
    else
    {
       lhs_->emit(of, level);
-      of << " = ";
+      of << " =";
       rhs_->emit(of, level);
    }
 }
@@ -173,74 +182,100 @@ void cpp_expr_list::emit(std::ostream &of, int level) const
       emit_children<cpp_expr>(of, children_, indent(level), ",", false);
 }
 
-cppClass::cppClass(const string& name, cpp_inherited_class in)
-      : name_(name), in_(in)
+cppClass::cppClass(const string& name, cpp_class_type type)
+      : name_(name), type_(type)
 {
    cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
    constr->set_constructor();
    constr->set_comment("Default constructor");
    add_function(constr);
-   switch(in_)
+   switch(type_)
    {
-      case CPP_WARPED_EVENT:
+      case CPP_CLASS_WARPED_EVENT:
          add_event_functions();
          break;
-      case CPP_WARPED_SIM_OBJ:
+      case CPP_CLASS_WARPED_SIM_OBJ:
          add_simulation_functions();
          break;
+      default:
+         error("Class not handled yet");
    }
 }
 
 void cppClass::add_event_functions()
 {
+   // Create inherited function "receiverName"
    cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
    const_ref_string_type->set_const();
    const_ref_string_type->set_reference();
-   cpp_type *returnType2 = new cpp_type(CPP_TYPE_UNSIGNED_INT);
    cpp_function *rec_name = new cpp_function("receiverName", const_ref_string_type);
    rec_name->set_comment("Inherited getter method");
    rec_name->set_const();
    rec_name->set_virtual();
    rec_name->set_override();
-   cpp_function *timestamp = new cpp_function("timestamp", returnType2);
+   // Create inherited function "timestamp"
+   cpp_type *timestamp_type = new cpp_type(CPP_TYPE_UNSIGNED_INT);
+   cpp_function *timestamp = new cpp_function("timestamp", timestamp_type);
    timestamp->set_comment("Inherited getter method");
    timestamp->set_const();
    timestamp->set_virtual();
    timestamp->set_override();
-   cpp_var *receiver_var = new cpp_var("receiver_name", new cpp_type(CPP_TYPE_STD_STRING));
-   cpp_var *timestamp_var = new cpp_var("ts_", new cpp_type(CPP_TYPE_UNSIGNED_INT));
+   // Create values to return
+   cpp_var *receiver_var = new cpp_var("receiver_name", const_ref_string_type);
+   cpp_var *timestamp_var = new cpp_var("ts_", timestamp_type);
    add_var(receiver_var);
    add_var(timestamp_var);
    add_function(rec_name);
    add_function(timestamp);
-   timestamp->add_stmt(new cpp_return_stmt(timestamp_var->get_ref()));
-   rec_name->add_stmt(new cpp_return_stmt(receiver_var->get_ref()));
-   // add init list to constructor.
+   // Create the members that simulation objects will use
+   cpp_var * signal_value = new cpp_var("new_value_", new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
+   signal_value->set_comment("The new input value");
+   cpp_var * signal_name = new cpp_var("changed_signal_name", const_ref_string_type);
+   signal_name->set_comment("The changed input signal name");
+   add_var(signal_value);
+   add_var(signal_name);
+   // Create return statements
+   timestamp->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, timestamp_var->get_ref(), timestamp_var->get_type()));
+   rec_name->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, receiver_var->get_ref(), receiver_var->get_type()));
+   // Add init list to constructor.
    cpp_function* constr = get_costructor();
    cpp_var *name = new cpp_var("name", const_ref_string_type);
    constr->add_param(name);
-   cpp_fcall_stmt* init_name = new cpp_fcall_stmt(receiver_var->get_ref(), "");
+   cpp_fcall_stmt* init_name = new cpp_fcall_stmt(const_ref_string_type, receiver_var->get_ref(), "");
    init_name->add_param(name->get_ref());
    constr->add_init(init_name);
 }
 
+/*
+ * TODO:
+ * This function starts to be tough.
+ * Refactory needed.
+ */
 void cppClass::add_simulation_functions()
 {
-   cpp_type* temp = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
-   temp->add_type(new cpp_type(CPP_TYPE_STD_STRING));
-   cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_MAP, temp));
+   // Create vars
+   cpp_type* inside_input_map = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
+   inside_input_map->add_type(new cpp_type(CPP_TYPE_STD_STRING));
+   cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_MAP, inside_input_map));
    inputvar->set_comment("std::map< signal_name, value >");
    add_var(inputvar);
+   cpp_type* output_vec = new cpp_type(CPP_TYPE_STD_VECTOR, new cpp_type(CPP_TYPE_STD_STRING));
+   cpp_type* output_map_type = new cpp_type(CPP_TYPE_STD_MAP, output_vec);
+   output_map_type->add_type(new cpp_type(CPP_TYPE_STD_STRING));
+   cpp_var *output_var = new cpp_var("hierarchy_", output_map_type);
+   output_var->set_comment("map<submodule, vector<signals>");
+   add_var(output_var);
    cpp_var *state_var = new cpp_var("state_", new cpp_type(CPP_TYPE_ELEMENT_STATE));
-   state_var->set_comment("This will become the State variable");
+   state_var->set_comment("The State variable");
    add_var(state_var);
    cpp_type *returnType = new cpp_type(CPP_TYPE_STD_VECTOR,
          new cpp_type(CPP_TYPE_SHARED_PTR,
          new cpp_type(CPP_TYPE_WARPED_EVENT)));
+   // Create initial event function
    cpp_function *init_fun = new cpp_function(WARPED_INIT_EVENT_FUN_NAME, returnType);
    init_fun->set_override();
    init_fun->set_virtual();
-   // event_handler
+   // Create event handler function
    cpp_function *event_handler = new cpp_function(WARPED_HANDLE_EVENT_FUN_NAME, returnType);
    event_handler->set_override();
    event_handler->set_virtual();
@@ -249,18 +284,18 @@ void cppClass::add_simulation_functions()
    event_type->set_const();
    cpp_var *event_param = new cpp_var("event", event_type);
    event_handler->add_param(event_param);
-   // get_state
+   // Create getState function
    cpp_type *get_state_ret_type = new cpp_type(CPP_TYPE_WARPED_OBJECT_STATE);
    get_state_ret_type->set_reference();
    cpp_function *get_state_fun = new cpp_function("getState", get_state_ret_type);
-   get_state_fun->add_stmt(new cpp_return_stmt(state_var->get_ref()));
+   get_state_fun->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, state_var->get_ref(), state_var->get_type()));
    get_state_fun->set_override();
    get_state_fun->set_virtual();
-   // TODO: handle input.
+   // Add all functions to the class
    add_function(init_fun);
    add_function(get_state_fun);
    add_function(event_handler);
-   // add init list to constructor.
+   // Add init list to the constructor
    cpp_function* constr = get_costructor();
    cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
    const_ref_string_type->set_const();
@@ -268,9 +303,30 @@ void cppClass::add_simulation_functions()
    cpp_var *name = new cpp_var("name", const_ref_string_type);
    constr->add_param(name);
    cpp_var_ref* sim_obj = new cpp_var_ref("", new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT));
-   cpp_fcall_stmt* init_name = new cpp_fcall_stmt(sim_obj, "");
+   cpp_fcall_stmt* init_name = new cpp_fcall_stmt(new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT), sim_obj, "");
    init_name->add_param(name->get_ref());
    constr->add_init(init_name);
+   // Add statements to functions
+   cpp_type *local_event_type = new cpp_type(CPP_TYPE_CUSTOM_EVENT);
+   local_event_type->set_const();
+   local_event_type->set_reference();
+   cpp_var *local_event = new cpp_var("my_event", local_event_type);
+   // Start handling the event
+   cpp_assign_stmt *cast_stmt = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, local_event->get_ref(), local_event->get_type()), new cpp_unaryop_expr(CPP_UNARYOP_STATIC_CAST, event_param->get_ref(), local_event->get_type()));
+   event_handler->add_stmt(cast_stmt);
+
+   cpp_type* input_type = new cpp_type(CPP_TYPE_STD_MAP, inside_input_map);
+   input_type->set_iterator();
+   cpp_var* iterator = new cpp_var ("it", input_type);
+   cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "begin"));
+   cpp_for * change_input_for = new cpp_for();
+   change_input_for->add_precycle(precycle);
+   cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, iterator->get_type());
+   cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
+   cond->add_expr(new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "end"));
+   change_input_for->set_condition(cond);
+   change_input_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
+   event_handler->add_stmt(change_input_for);
 }
 
 cpp_function* cppClass::get_function(const std::string &name) const
@@ -291,6 +347,30 @@ void cpp_context::emit_after_classes(std::ostream &of, int level) const
    of << "}; ";
 }
 
+void cpp_for::set_condition(cpp_expr* p) {
+   assert(!condition_);
+   condition_ = p;
+};
+
+void cpp_for::emit(std::ostream &of, int level) const
+{
+   newline(of, level);
+   of << "for(";
+   if(!precycle_.empty())
+      emit_children<cpp_expr>(of, precycle_, indent(level), ",", false);
+   of << "; ";
+   if(condition_ != NULL)
+      condition_->emit(of);
+   of << "; ";
+   if(!postcycle_.empty())
+      emit_children<cpp_expr>(of, postcycle_, indent(level), ",", false);
+   of << "){ ";
+   newline(of, level);
+   if(!statements_.empty())
+      emit_children<cpp_stmt>(of, statements_, indent(level), ";");
+   of << "}";
+}
+
 void cpp_context::emit_before_classes(std::ostream &of, int level) const
 {
    newline(of, level);
@@ -306,14 +386,16 @@ void cppClass::emit(std::ostream &of, int level) const
    newline(of, level);
    emit_comment(of, level);
    of << "class " << name_;
-   switch(in_)
+   switch(type_)
    {
-      case CPP_WARPED_SIM_OBJ:
+      case CPP_CLASS_WARPED_SIM_OBJ:
          of << " : public warped::SimulationObject";
          break;
-      case CPP_WARPED_EVENT:
+      case CPP_CLASS_WARPED_EVENT:
          of << " : public warped::Event";
          break;
+      default:
+         error("Class not handled yet");
    }
    of << " {";
    newline(of, level);
@@ -343,27 +425,43 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
    case CPP_UNARYOP_NOT:
        of << "not ";
       break;
-   case CPP_UNARYOP_LITERAL:
-      operand_->emit(of, level);
+   case CPP_UNARYOP_STATIC_CAST:
+       of << "static_cast<";
+       type_->emit(of);
+       of << ">( ";
       break;
-   case CPP_UNARYOP_NEW:
-      of << "new ";
-      // FIXME
-      operand_->get_type()->emit(of, level),
-      operand_->emit(of, level);
+   case CPP_UNARYOP_LITERAL:
+      break;
+   case CPP_UNARYOP_DECL:
+      operand_->get_type()->emit(of, level);
       break;
    case CPP_UNARYOP_NEG:
        of << "-";
       break;
+   case CPP_UNARYOP_ADD:
+      break;
+   case CPP_UNARYOP_RETURN:
+      of << "return";
+      break;
+   default:
+      error("Unary operation not supported");
    }
    operand_->emit(of, level);
 
+   // Cast needs to close the parenthesis
+   if(op_ == CPP_UNARYOP_STATIC_CAST)
+       of << " )";
+   
+   if(op_ == CPP_UNARYOP_ADD)
+       of << "++";
    close_parens(of);
 }
 
 void cpp_fcall_stmt::emit(std::ostream &of, int level) const
 {
    base_->emit(of, level);
+   if(!fun_name_.empty())
+      of << "." << fun_name_;
    of << "(";
    parameters_->emit(of, level);
    of << ")";
@@ -375,7 +473,7 @@ void cpp_function::emit(std::ostream &of, int level) const
    if(isvirtual)
       of << "virtual ";
    type_->emit(of, level);
-   of << name_ << " (";
+   of << " " << name_ << " (";
    if(!scope_.get_decls().empty())
       emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ",", false);
    of << ")";
@@ -405,5 +503,5 @@ void cpp_var::emit(std::ostream &of, int level) const
 {
    emit_comment(of, level);
    type_->emit(of, level);
-   of << name_;
+   of << " " << name_;
 }
