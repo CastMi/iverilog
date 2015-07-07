@@ -69,6 +69,7 @@ private:
 
 typedef std::list<cpp_element*> element_list_t;
 
+int deindent(int level);
 int indent(int level);
 void newline(std::ostream &of, int level);
 std::string nl_string(int level);

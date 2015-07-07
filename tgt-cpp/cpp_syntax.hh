@@ -125,6 +125,7 @@ enum cpp_unaryop_t {
    CPP_UNARYOP_NOT,
    CPP_UNARYOP_ADD,
    CPP_UNARYOP_RETURN,
+   CPP_UNARYOP_DEREF,
    CPP_UNARYOP_DECL,
    CPP_UNARYOP_STATIC_CAST,
    CPP_UNARYOP_LITERAL,
@@ -249,7 +250,7 @@ private:
  */
 class cpp_fcall_stmt : public cpp_expr {
 public:
-   cpp_fcall_stmt(const cpp_type* ret_type, cpp_var_ref * base, const std::string& fun_name)
+   cpp_fcall_stmt(const cpp_type* ret_type, cpp_expr * base, const std::string& fun_name)
       : cpp_expr(ret_type), base_(base), fun_name_(fun_name)
    {
       parameters_ = new cpp_expr_list();
@@ -260,7 +261,7 @@ public:
    virtual void add_param(cpp_expr* el) { parameters_->add_cpp_expr(el); };
 
 protected:
-   cpp_var_ref *base_;
+   cpp_expr *base_;
    // The parameters could be constant or reference to variable
    cpp_expr_list* parameters_;
    std::string fun_name_;
@@ -269,23 +270,38 @@ protected:
 /*
  * A cycle
  */
-class cpp_for : public cpp_stmt {
+class cpp_if : public cpp_stmt {
 public:
-   cpp_for(cpp_expr * condition) : condition_(condition) {};
-   cpp_for() : condition_(NULL) {};
-   ~cpp_for() {};
+   cpp_if(cpp_expr * condition) : condition_(condition) {};
+   cpp_if() : condition_(NULL) {};
+   ~cpp_if() {};
 
    virtual void emit(std::ostream &of, int level = 0) const;
    void add_to_body(cpp_expr* item) { statements_.push_back(item); };
-   void add_precycle(cpp_expr* p) { precycle_.push_back(p); }
    void set_condition(cpp_expr* p);
+
+protected:
+   cpp_expr* condition_;
+   std::list<cpp_stmt*> statements_;
+};
+
+/*
+ * A cycle.
+ * This class inherits from the if class only for simplicity
+ */
+class cpp_for : public cpp_if {
+public:
+   cpp_for(cpp_expr * condition) : cpp_if(condition) {};
+   cpp_for() {};
+   ~cpp_for() {};
+
+   virtual void emit(std::ostream &of, int level = 0) const;
+   void add_precycle(cpp_expr* p) { precycle_.push_back(p); }
    void add_postcycle(cpp_expr* p) { postcycle_.push_back(p); }
 
 private:
-   cpp_expr* condition_;
    std::list<cpp_expr*> precycle_;
    std::list<cpp_expr*> postcycle_;
-   std::list<cpp_stmt*> statements_;
 };
 
 class cpp_assign_stmt : public cpp_expr {

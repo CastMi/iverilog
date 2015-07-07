@@ -29,11 +29,16 @@
 
 using namespace std;
 
-static const int CPP_INDENT = 2;  // Spaces to indent
+static const int CPP_INDENT = 3;  // Spaces to indent
 
 int indent(int level)
 {
    return level + CPP_INDENT;
+}
+
+int deindent(int level)
+{
+   return level - CPP_INDENT;
 }
 
 std::string nl_string(int level)

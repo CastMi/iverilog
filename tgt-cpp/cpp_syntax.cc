@@ -90,26 +90,25 @@ void cpp_binop_expr::emit(std::ostream &of, int level) const
    (*it)->emit(of, level);
    while(++it != operands_.end())
    {
-      of << " ";
       switch(op_)
       {
          case CPP_BINOP_EQ:
-            of << "==";
+            of << " == ";
             break;
          case CPP_BINOP_AND:
-            of << "and";
+            of << " and ";
             break;
          case CPP_BINOP_OR:
-            of << "or";
+            of << " or ";
             break;
          case CPP_BINOP_NEQ:
-            of << "!=";
+            of << " != ";
             break;
          case CPP_BINOP_ADD:
-            of << "+";
+            of << " + ";
             break;
          case CPP_BINOP_SUB:
-            of << "-";
+            of << " - ";
             break;
          default:
             error("This binary operation is not supported");
@@ -138,7 +137,6 @@ void cpp_const_expr::emit(std::ostream &of, int) const
 
 void cpp_var_ref::emit(std::ostream &of, int level) const
 {
-   of << " ";
    if(!name_.empty())
       of << name_;
    else
@@ -171,15 +169,14 @@ void cpp_assign_stmt::emit(std::ostream &of, int level) const
    else
    {
       lhs_->emit(of, level);
-      of << " =";
+      of << " = ";
       rhs_->emit(of, level);
    }
 }
 
 void cpp_expr_list::emit(std::ostream &of, int level) const
 {
-   if(!children_.empty())
-      emit_children<cpp_expr>(of, children_, indent(level), ",", false);
+   emit_children<cpp_expr>(of, children_, indent(level), ",", false);
 }
 
 cppClass::cppClass(const string& name, cpp_class_type type)
@@ -220,6 +217,10 @@ void cppClass::add_event_functions()
    timestamp->set_const();
    timestamp->set_virtual();
    timestamp->set_override();
+   // Create function to retrieve the name of the signal
+   cpp_function *signal_name_getter = new cpp_function("signalName", const_ref_string_type);
+   signal_name_getter->set_comment("Get the name of the changed signal");
+   signal_name_getter->set_const();
    // Create values to return
    cpp_var *receiver_var = new cpp_var("receiver_name", const_ref_string_type);
    cpp_var *timestamp_var = new cpp_var("ts_", timestamp_type);
@@ -227,6 +228,7 @@ void cppClass::add_event_functions()
    add_var(timestamp_var);
    add_function(rec_name);
    add_function(timestamp);
+   add_function(signal_name_getter);
    // Create the members that simulation objects will use
    cpp_var * signal_value = new cpp_var("new_value_", new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
    signal_value->set_comment("The new input value");
@@ -237,6 +239,7 @@ void cppClass::add_event_functions()
    // Create return statements
    timestamp->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, timestamp_var->get_ref(), timestamp_var->get_type()));
    rec_name->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, receiver_var->get_ref(), receiver_var->get_type()));
+   signal_name_getter->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, signal_name->get_ref(), signal_name->get_type()));
    // Add init list to constructor.
    cpp_function* constr = get_costructor();
    cpp_var *name = new cpp_var("name", const_ref_string_type);
@@ -259,11 +262,17 @@ void cppClass::add_simulation_functions()
    cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_MAP, inside_input_map));
    inputvar->set_comment("std::map< signal_name, value >");
    add_var(inputvar);
+   /*
    cpp_type* output_vec = new cpp_type(CPP_TYPE_STD_VECTOR, new cpp_type(CPP_TYPE_STD_STRING));
    cpp_type* output_map_type = new cpp_type(CPP_TYPE_STD_MAP, output_vec);
    output_map_type->add_type(new cpp_type(CPP_TYPE_STD_STRING));
    cpp_var *output_var = new cpp_var("hierarchy_", output_map_type);
-   output_var->set_comment("map<submodule, vector<signals>");
+   output_var->set_comment("map< SimObj, vector<signals> >");
+   add_var(output_var);
+   */
+   cpp_type* output_vec = new cpp_type(CPP_TYPE_STD_VECTOR, new cpp_type(CPP_TYPE_STD_STRING));
+   cpp_var *output_var = new cpp_var("hierarchy_", output_vec);
+   output_var->set_comment("vector<SimObj>");
    add_var(output_var);
    cpp_var *state_var = new cpp_var("state_", new cpp_type(CPP_TYPE_ELEMENT_STATE));
    state_var->set_comment("The State variable");
@@ -307,6 +316,9 @@ void cppClass::add_simulation_functions()
    init_name->add_param(name->get_ref());
    constr->add_init(init_name);
    // Add statements to functions
+   cpp_var *response_event = new cpp_var("response_events", returnType);
+   response_event->set_comment("Return value");
+   event_handler->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, response_event->get_ref(), response_event->get_type()));
    cpp_type *local_event_type = new cpp_type(CPP_TYPE_CUSTOM_EVENT);
    local_event_type->set_const();
    local_event_type->set_reference();
@@ -314,19 +326,34 @@ void cppClass::add_simulation_functions()
    // Start handling the event
    cpp_assign_stmt *cast_stmt = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, local_event->get_ref(), local_event->get_type()), new cpp_unaryop_expr(CPP_UNARYOP_STATIC_CAST, event_param->get_ref(), local_event->get_type()));
    event_handler->add_stmt(cast_stmt);
-
-   cpp_type* input_type = new cpp_type(CPP_TYPE_STD_MAP, inside_input_map);
+   // Change my internal state according to the event received
+   cpp_if * change_input_if = new cpp_if();
+   cpp_binop_expr * cond_if = new cpp_binop_expr(CPP_BINOP_NEQ, local_event->get_type());
+   cpp_fcall_stmt* find = new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "find");
+   cpp_fcall_stmt * new_signal = new cpp_fcall_stmt(const_ref_string_type, local_event->get_ref(), "signalName");
+   find->add_param(new_signal);
+   cond_if->add_expr_front(find);
+   cond_if->add_expr(new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "end"));
+   change_input_if->set_condition(cond_if);
+   // Assign new input value inside the if
+   event_handler->add_stmt(change_input_if);
+   // Add the cycle that will create the events
+   cpp_type* input_type = new cpp_type(CPP_TYPE_STD_VECTOR, new cpp_type(CPP_TYPE_STD_STRING));
    input_type->set_iterator();
    cpp_var* iterator = new cpp_var ("it", input_type);
-   cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "begin"));
-   cpp_for * change_input_for = new cpp_for();
-   change_input_for->add_precycle(precycle);
+   cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "begin"));
+   cpp_for * push_event_for = new cpp_for();
+   push_event_for->add_precycle(precycle);
    cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, iterator->get_type());
    cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
-   cond->add_expr(new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "end"));
-   change_input_for->set_condition(cond);
-   change_input_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
-   event_handler->add_stmt(change_input_for);
+   cond->add_expr(new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "end"));
+   push_event_for->set_condition(cond);
+   push_event_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
+   cpp_fcall_stmt* add_event = new cpp_fcall_stmt(response_event->get_type(), new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, response_event->get_ref(), response_event->get_type()), "emplace_back");
+   add_event->add_param(new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()));
+   push_event_for->add_to_body(add_event);
+   event_handler->add_stmt(push_event_for);
+   event_handler->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, response_event->get_ref(), response_event->get_type()));
 }
 
 cpp_function* cppClass::get_function(const std::string &name) const
@@ -342,15 +369,33 @@ void cpp_context::emit_after_classes(std::ostream &of, int level) const
 {
    newline(of, level);
    of << "int main(int argc, const char** argv) {";
+   newline(of, indent(level));
    emit_children<cpp_stmt>(of, statements_, indent(level), ";");
    newline(of, level);
    of << "}; ";
 }
 
-void cpp_for::set_condition(cpp_expr* p) {
+void cpp_if::set_condition(cpp_expr* p) {
    assert(!condition_);
    condition_ = p;
 };
+
+void cpp_if::emit(std::ostream &of, int level) const
+{
+   assert(condition_);
+   newline(of, level);
+   of << "if(";
+   condition_->emit(of);
+   of << ") {";
+   if(!statements_.empty())
+   {
+      newline(of, indent(level));
+      emit_children<cpp_stmt>(of, statements_, indent(level), ";", false);
+      of << ";";
+   }
+   newline(of, level);
+   of << "}";
+}
 
 void cpp_for::emit(std::ostream &of, int level) const
 {
@@ -358,16 +403,23 @@ void cpp_for::emit(std::ostream &of, int level) const
    of << "for(";
    if(!precycle_.empty())
       emit_children<cpp_expr>(of, precycle_, indent(level), ",", false);
-   of << "; ";
-   if(condition_ != NULL)
+   of << ";";
+   if(condition_ != NULL) {
+      newline(of, indent(level));
       condition_->emit(of);
-   of << "; ";
-   if(!postcycle_.empty())
+   }
+   of << ";";
+   if(!postcycle_.empty()) {
+      newline(of, indent(level));
       emit_children<cpp_expr>(of, postcycle_, indent(level), ",", false);
-   of << "){ ";
+   }
+   of << ") {";
+   if(!statements_.empty()){
+      newline(of, indent(indent(level)));
+      emit_children<cpp_stmt>(of, statements_, indent(indent(level)), ";", false);
+      of << ";";
+   }
    newline(of, level);
-   if(!statements_.empty())
-      emit_children<cpp_stmt>(of, statements_, indent(level), ";");
    of << "}";
 }
 
@@ -401,14 +453,11 @@ void cppClass::emit(std::ostream &of, int level) const
    newline(of, level);
    of << "public:";
 
-   if (!scope_.empty()) {
-      newline(of, indent(level));
-      emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ";");
-   }
+   emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ";");
 
    newline(of, level);
-   of << "}; ";
-   newline(of, indent(level));
+   of << "};";
+   newline(of, 0);
 }
 
 const cpp_type *cpp_decl::get_type() const
@@ -428,20 +477,24 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
    case CPP_UNARYOP_STATIC_CAST:
        of << "static_cast<";
        type_->emit(of);
-       of << ">( ";
+       of << ">(";
+      break;
+   case CPP_UNARYOP_DEREF:
+       of << "*(";
       break;
    case CPP_UNARYOP_LITERAL:
       break;
    case CPP_UNARYOP_DECL:
       operand_->get_type()->emit(of, level);
+       of << " ";
       break;
    case CPP_UNARYOP_NEG:
-       of << "-";
+       of << "- ";
       break;
    case CPP_UNARYOP_ADD:
       break;
    case CPP_UNARYOP_RETURN:
-      of << "return";
+      of << "return ";
       break;
    default:
       error("Unary operation not supported");
@@ -449,8 +502,9 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
    operand_->emit(of, level);
 
    // Cast needs to close the parenthesis
-   if(op_ == CPP_UNARYOP_STATIC_CAST)
-       of << " )";
+   if(op_ == CPP_UNARYOP_STATIC_CAST ||
+         op_ == CPP_UNARYOP_DEREF)
+       of << ")";
    
    if(op_ == CPP_UNARYOP_ADD)
        of << "++";
@@ -463,19 +517,19 @@ void cpp_fcall_stmt::emit(std::ostream &of, int level) const
    if(!fun_name_.empty())
       of << "." << fun_name_;
    of << "(";
-   parameters_->emit(of, level);
+   parameters_->emit(of, indent(level));
    of << ")";
 }
 
 void cpp_function::emit(std::ostream &of, int level) const
 {
+   newline(of, level);
    emit_comment(of, level);
    if(isvirtual)
       of << "virtual ";
    type_->emit(of, level);
    of << " " << name_ << " (";
-   if(!scope_.get_decls().empty())
-      emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ",", false);
+   emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ",", false);
    of << ")";
    if(isconst)
       of << " const";
@@ -487,8 +541,10 @@ void cpp_function::emit(std::ostream &of, int level) const
       emit_children<cpp_fcall_stmt>(of, init_list_, indent(level), ",", false);
    }
    of << " {";
-   if(!statements_.empty())
-      emit_children<cpp_stmt>(of, statements_, indent(level), ";");
+   if(!statements_.empty()) {
+      newline(of, indent(level));
+      emit_children<cpp_stmt>(of, statements_, level, ";");
+   }
    of << "}";
 }
 
@@ -501,6 +557,7 @@ cpp_var_ref* cpp_var::get_ref()
 
 void cpp_var::emit(std::ostream &of, int level) const
 {
+   newline(of, level);
    emit_comment(of, level);
    type_->emit(of, level);
    of << " " << name_;
