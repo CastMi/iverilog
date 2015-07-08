@@ -403,6 +403,7 @@ public:
    const std::string &get_name() const { return name_; }
    void add_var(cpp_var *item) { scope_.add_decl(item); }
    void add_to_inputs(cpp_var *item);
+   void add_to_hierarchy(cpp_var *item);
    void add_function(cpp_procedural* fun) { scope_.add_decl(fun); };
    cpp_class_type get_type() const { return type_; };
 
@@ -414,6 +415,7 @@ private:
    void add_simulation_functions();
    void add_event_functions();
 
+   static unsigned and_port_num_;
    // Class name
    std::string name_;
    cpp_scope scope_;

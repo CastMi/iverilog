@@ -582,7 +582,7 @@ void draw_main()
    // Create event class
    cppClass *theclass = new cppClass(CUSTOM_EVENT_CLASS_NAME, CPP_CLASS_WARPED_EVENT);
    theclass->set_comment("Created to store information about the triggered event");
-   remember_event_class(theclass);
+   only_remember_class(theclass);
 
    // Create main method
    cpp_var_ref* lhs = new cpp_var_ref("this_sim", new cpp_type(CPP_TYPE_WARPED_SIMULATION));

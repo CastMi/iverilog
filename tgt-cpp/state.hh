@@ -36,7 +36,7 @@ cpp_scope *find_scope_for_signal(ivl_signal_t sig);
 const std::string &get_renamed_signal(ivl_signal_t sig);
 ivl_signal_t find_signal_named(const std::string &name, const cpp_scope *scope);
 
-void remember_event_class(cppClass* theclass);
+void only_remember_class(cppClass* theclass);
 void remember_class(cppClass *ent, ivl_scope_t scope);
 cppClass* find_class(ivl_scope_t scope);
 cppClass* find_class(const std::string& name);

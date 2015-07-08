@@ -25,6 +25,7 @@
 #include <cassert>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 #include <typeinfo>
 #include <algorithm>
 #include <iomanip>
@@ -32,6 +33,7 @@
 using namespace std;
 
 #define INPUT_VAR_NAME "inputs_"
+#define HIERARCHY_VAR_NAME "hierarchy_"
 
 void cpp_scope::add_decl(cpp_decl *decl)
 {
@@ -189,20 +191,44 @@ void cpp_expr_list::emit(std::ostream &of, int level) const
    emit_children<cpp_expr>(of, children_, indent(level), ",", false);
 }
 
+// The simplest name mangling.
+unsigned int cppClass::and_port_num_(0);
+
 cppClass::cppClass(const string& name, cpp_class_type type)
-      : name_(name), type_(type)
+      : scope_(), type_(type)
 {
-   cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
-   constr->set_constructor();
-   constr->set_comment("Default constructor");
-   add_function(constr);
    switch(type_)
    {
       case CPP_CLASS_WARPED_EVENT:
-         add_event_functions();
+         {
+            name_ = name;
+            cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
+            constr->set_constructor();
+            constr->set_comment("Default event constructor");
+            add_function(constr);
+            add_event_functions();
+         }
          break;
       case CPP_CLASS_WARPED_SIM_OBJ:
-         add_simulation_functions();
+         {
+            name_ = name;
+            cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
+            constr->set_constructor();
+            constr->set_comment("Default simulation object constructor");
+            add_function(constr);
+            add_simulation_functions();
+         }
+         break;
+      case CPP_CLASS_AND:
+         {
+            std::ostringstream ss;
+            ss << name << "_andPort_" << ++and_port_num_;
+            name_ = ss.str();
+            cpp_function* constr = new cpp_function(ss.str().c_str(), new cpp_type(CPP_TYPE_NOTYPE));
+            constr->set_constructor();
+            constr->set_comment(ss.str() + " constructor");
+            add_function(constr);
+         }
          break;
       default:
          error("Class not handled yet");
@@ -281,7 +307,7 @@ void cppClass::add_simulation_functions()
    add_var(output_var);
    */
    cpp_type* output_vec = new cpp_type(CPP_TYPE_STD_VECTOR, new cpp_type(CPP_TYPE_STD_STRING));
-   cpp_var *output_var = new cpp_var("hierarchy_", output_vec);
+   cpp_var *output_var = new cpp_var(HIERARCHY_VAR_NAME, output_vec);
    output_var->set_comment("vector<SimObj>");
    add_var(output_var);
    cpp_var *state_var = new cpp_var("state_", new cpp_type(CPP_TYPE_ELEMENT_STATE));
@@ -455,6 +481,17 @@ void cppClass::add_to_inputs(cpp_var* item)
    get_scope()->add_visible(item);
 }
 
+void cppClass::add_to_hierarchy(cpp_var* item)
+{
+   cpp_function* constr = get_costructor();
+   cpp_decl* hierarchy_var = get_scope()->get_decl(HIERARCHY_VAR_NAME);
+   assert(hierarchy_var);
+   cpp_fcall_stmt* add_event = new cpp_fcall_stmt(hierarchy_var->get_type(), new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, new cpp_var_ref(hierarchy_var->get_name(), hierarchy_var->get_type()), hierarchy_var->get_type()), "emplace_back");
+   add_event->add_param(new cpp_const_expr(item->get_name().c_str(), new cpp_type(CPP_TYPE_STD_STRING)));
+   constr->add_stmt(add_event);
+   get_scope()->add_visible(item);
+}
+
 void cppClass::emit(std::ostream &of, int level) const
 {
    newline(of, level);
@@ -463,6 +500,7 @@ void cppClass::emit(std::ostream &of, int level) const
    switch(type_)
    {
       case CPP_CLASS_WARPED_SIM_OBJ:
+      case CPP_CLASS_AND:
          of << " : public warped::SimulationObject";
          break;
       case CPP_CLASS_WARPED_EVENT:
