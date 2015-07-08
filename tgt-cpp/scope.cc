@@ -355,23 +355,22 @@ static void declare_one_signal(cppClass *theclass, ivl_signal_t sig,
          theclass->add_var(var);
       }
          break;
-   case IVL_SIP_INPUT:
    case IVL_SIP_OUTPUT:
-   case IVL_SIP_INOUT:
       {
          cpp_var *var = new cpp_var(name, sig_type);
-
-         ostringstream ss;
-         if (ivl_signal_local(sig)) {
-               ss << "Temporary created at " << ivl_signal_file(sig) << ":"
-                  << ivl_signal_lineno(sig);
-         } else {
-            ss << "Declared at " << ivl_signal_file(sig) << ":"
-               << ivl_signal_lineno(sig);
-         }
-         var->set_comment(ss.str().c_str());
-
+         var->set_comment("Output var");
          theclass->add_var(var);
+      }
+         break;
+   case IVL_SIP_INPUT:
+      {
+         cpp_var *var = new cpp_var(name, sig_type);
+         theclass->add_to_inputs(var);
+      }
+         break;
+   case IVL_SIP_INOUT:
+      {
+         error("inout is not supported yet");
       }
          break;
    default:

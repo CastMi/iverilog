@@ -31,19 +31,29 @@
 
 using namespace std;
 
+#define INPUT_VAR_NAME "inputs_"
+
 void cpp_scope::add_decl(cpp_decl *decl)
 {
-   decls_.push_back(decl);
+   to_print_.push_back(decl);
+}
+
+void cpp_scope::add_visible(cpp_decl *decl)
+{
+   others_.push_back(decl);
 }
 
 cpp_decl *cpp_scope::get_decl(const std::string &name) const
 {
    std::list<cpp_decl*>::const_iterator it;
-   for (it = decls_.begin(); it != decls_.end(); ++it) {
+   for (it = to_print_.begin(); it != to_print_.end(); ++it) {
       if (strcasecmp((*it)->get_name().c_str(), name.c_str()) == 0)
          return *it;
    }
-
+   for (it = others_.begin(); it != others_.end(); ++it) {
+      if (strcasecmp((*it)->get_name().c_str(), name.c_str()) == 0)
+         return *it;
+   }
    return parent_ ? parent_->get_decl(name) : NULL;
 }
 
@@ -122,8 +132,8 @@ void cpp_const_expr::emit(std::ostream &of, int) const
 {
    switch(get_type()->get_name())
    {
-      // Only primitive types are handled here
       case CPP_TYPE_INT:
+      case CPP_TYPE_NOTYPE:
       case CPP_TYPE_UNSIGNED_INT:
          of << value_;
          break;
@@ -259,7 +269,7 @@ void cppClass::add_simulation_functions()
    // Create vars
    cpp_type* inside_input_map = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
    inside_input_map->add_type(new cpp_type(CPP_TYPE_STD_STRING));
-   cpp_var *inputvar = new cpp_var("inputs_", new cpp_type(CPP_TYPE_STD_MAP, inside_input_map));
+   cpp_var *inputvar = new cpp_var(INPUT_VAR_NAME, new cpp_type(CPP_TYPE_STD_MAP, inside_input_map));
    inputvar->set_comment("std::map< signal_name, value >");
    add_var(inputvar);
    /*
@@ -431,6 +441,18 @@ void cpp_context::emit_before_classes(std::ostream &of, int level) const
       emit_children<cpp_var>(of, elem_parts_, indent(level), ";");
    of << "};";
    newline(of, level);
+}
+
+void cppClass::add_to_inputs(cpp_var* item)
+{
+   cpp_function* constr = get_costructor();
+   cpp_decl* input_var = get_scope()->get_decl(INPUT_VAR_NAME);
+   assert(input_var);
+   cpp_fcall_stmt* add_event = new cpp_fcall_stmt(input_var->get_type(), new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, new cpp_var_ref(input_var->get_name(), input_var->get_type()), input_var->get_type()), "emplace");
+   add_event->add_param(new cpp_const_expr(item->get_name().c_str(), new cpp_type(CPP_TYPE_STD_STRING)));
+   add_event->add_param(new cpp_const_expr("boost::indeterminate", new cpp_type(CPP_TYPE_NOTYPE)));
+   constr->add_stmt(add_event);
+   get_scope()->add_visible(item);
 }
 
 void cppClass::emit(std::ostream &of, int level) const

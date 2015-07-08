@@ -224,23 +224,22 @@ public:
    ~cpp_scope() {}
 
    void add_decl(cpp_decl *decl);
+   void add_visible(cpp_decl *decl);
    cpp_decl *get_decl(const std::string &name) const;
    bool have_declared(const std::string &name) const;
    bool name_collides(const string& name) const;
    bool contained_within(const cpp_scope *other) const;
    cpp_scope *get_parent() const;
 
-   bool empty() const { return decls_.empty(); }
-   const std::list<cpp_decl*> &get_decls() const { return decls_; }
+   bool empty() const { return to_print_.empty(); }
+   const std::list<cpp_decl*> &get_decls() const { return to_print_; }
    void set_parent(cpp_scope *p) { parent_ = p; }
 
 private:
-   // TODO:
-   // distinguish between private/public?
-   // Something like:
-   // std::list<cpp_decl*> private_;
-   // std::list<cpp_decl*> public_;
-   std::list<cpp_decl*> decls_;
+   // All "normally visible" decls
+   std::list<cpp_decl*> to_print_;
+   // All other decls that are "hidden" for some reason
+   std::list<cpp_decl*> others_;
    cpp_scope *parent_;
 };
 
@@ -403,6 +402,7 @@ public:
    void emit(std::ostream &of, int level = 0) const;
    const std::string &get_name() const { return name_; }
    void add_var(cpp_var *item) { scope_.add_decl(item); }
+   void add_to_inputs(cpp_var *item);
    void add_function(cpp_procedural* fun) { scope_.add_decl(fun); };
    cpp_class_type get_type() const { return type_; };
 
