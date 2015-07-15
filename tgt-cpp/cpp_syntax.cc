@@ -21,6 +21,7 @@
 #include "cpp_syntax.hh"
 #include "cpp_helper.hh"
 #include "cpp_target.h"
+#include "state.hh"
 
 #include <cassert>
 #include <cstring>
@@ -32,8 +33,17 @@
 
 using namespace std;
 
-#define INPUT_VAR_NAME "inputs_"
+// fun names inside classes
+#define WARPED_HANDLE_EVENT_FUN_NAME "receiveEvent"
+#define WARPED_INIT_EVENT_FUN_NAME "createInitialEvents"
+#define WARPED_TIMESTAMP_FUN_NAME "timestamp"
+#define SIGNAL_NAME_GETTER_FUN_NAME "signalName"
+// var names inside classes
+#define INPUT_VAR_NAME "signals_"
 #define HIERARCHY_VAR_NAME "hierarchy_"
+// var names inside function
+#define RETURN_EVENT_LIST_VAR_NAME "response_event"
+#define CASTED_EVENT_VAR_NAME "my_event"
 
 void cpp_scope::add_decl(cpp_decl *decl)
 {
@@ -191,15 +201,25 @@ void cpp_expr_list::emit(std::ostream &of, int level) const
    emit_children<cpp_expr>(of, children_, indent(level), ",", false);
 }
 
-// The simplest name mangling.
-unsigned int cppClass::and_port_num_(0);
-
-cppClass::cppClass(const string& name, cpp_class_type type)
-      : scope_(), type_(type)
+cppClass::cppClass(const string& name, const cpp_inherit_class in)
+      : scope_(), inherit_(in) , type_(CPP_CLASS_MODULE)
 {
-   switch(type_)
+   switch(in)
    {
-      case CPP_CLASS_WARPED_EVENT:
+      case CPP_INHERIT_BASE_CLASS:
+         scope_.set_parent(find_class(BASE_CLASS_NAME)->get_scope());
+         /* DON'T ADD A BREAK HERE!! */
+      case CPP_INHERIT_SIM_OBJ:
+         {
+            name_ = name;
+            cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
+            constr->set_constructor();
+            constr->set_comment("Default simulation object constructor");
+            add_function(constr);
+            implement_simulation_functions();
+         }
+         break;
+      case CPP_INHERIT_EVENT:
          {
             name_ = name;
             cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
@@ -209,32 +229,46 @@ cppClass::cppClass(const string& name, cpp_class_type type)
             add_event_functions();
          }
          break;
-      case CPP_CLASS_WARPED_SIM_OBJ:
+      default:
+         assert(false);
+   }
+}
+
+cppClass::cppClass(const string& name, const cpp_class_type type)
+      : scope_(), inherit_(CPP_INHERIT_BASE_CLASS), type_(type)
+{
+   scope_.set_parent(find_class(BASE_CLASS_NAME)->get_scope());
+   switch(type_)
+   {
+      case CPP_CLASS_MODULE:
          {
             name_ = name;
             cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
             constr->set_constructor();
             constr->set_comment("Default simulation object constructor");
             add_function(constr);
-            add_simulation_functions();
+            implement_simulation_functions();
          }
          break;
       case CPP_CLASS_AND:
          {
-            std::ostringstream ss;
-            ss << name << "_andPort_" << ++and_port_num_;
-            name_ = ss.str();
-            cpp_function* constr = new cpp_function(ss.str().c_str(), new cpp_type(CPP_TYPE_NOTYPE));
+            name_ = name + "And";
+            cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
             constr->set_constructor();
-            constr->set_comment(ss.str() + " constructor");
+            constr->set_comment(name_ + " constructor");
             add_function(constr);
+            implement_simulation_functions();
          }
          break;
       default:
-         error("Class not handled yet");
+         error("Class type not handled yet");
    }
 }
 
+/*
+ * This method will create all methods and variables for a
+ * class that inherit from warped::Event
+ */
 void cppClass::add_event_functions()
 {
    // Create inherited function "receiverName"
@@ -248,15 +282,20 @@ void cppClass::add_event_functions()
    rec_name->set_override();
    // Create inherited function "timestamp"
    cpp_type *timestamp_type = new cpp_type(CPP_TYPE_UNSIGNED_INT);
-   cpp_function *timestamp = new cpp_function("timestamp", timestamp_type);
+   cpp_function *timestamp = new cpp_function(WARPED_TIMESTAMP_FUN_NAME, timestamp_type);
    timestamp->set_comment("Inherited getter method");
    timestamp->set_const();
    timestamp->set_virtual();
    timestamp->set_override();
-   // Create function to retrieve the name of the signal
-   cpp_function *signal_name_getter = new cpp_function("signalName", const_ref_string_type);
+   // Create function to retrieve the name of the changed signal
+   cpp_function *signal_name_getter = new cpp_function(SIGNAL_NAME_GETTER_FUN_NAME, const_ref_string_type);
    signal_name_getter->set_comment("Get the name of the changed signal");
    signal_name_getter->set_const();
+   // Create function to retrieve the new value of the signal
+   cpp_type* tribool_type = new cpp_type(CPP_TYPE_BOOST_TRIBOOL);
+   cpp_function *new_value_getter = new cpp_function("newValue", tribool_type);
+   new_value_getter->set_comment("Get the name of the new value of the signal");
+   new_value_getter->set_const();
    // Create values to return
    cpp_var *receiver_var = new cpp_var("receiver_name", const_ref_string_type);
    cpp_var *timestamp_var = new cpp_var("ts_", timestamp_type);
@@ -265,8 +304,9 @@ void cppClass::add_event_functions()
    add_function(rec_name);
    add_function(timestamp);
    add_function(signal_name_getter);
+   add_function(new_value_getter);
    // Create the members that simulation objects will use
-   cpp_var * signal_value = new cpp_var("new_value_", new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
+   cpp_var * signal_value = new cpp_var("new_value_", tribool_type);
    signal_value->set_comment("The new input value");
    cpp_var * signal_name = new cpp_var("changed_signal_name", const_ref_string_type);
    signal_name->set_comment("The changed input signal name");
@@ -276,50 +316,123 @@ void cppClass::add_event_functions()
    timestamp->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, timestamp_var->get_ref(), timestamp_var->get_type()));
    rec_name->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, receiver_var->get_ref(), receiver_var->get_type()));
    signal_name_getter->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, signal_name->get_ref(), signal_name->get_type()));
+   new_value_getter->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, signal_value->get_ref(), signal_value->get_type()));
    // Add init list to constructor.
    cpp_function* constr = get_costructor();
+   // Add name var
    cpp_var *name = new cpp_var("name", const_ref_string_type);
    constr->add_param(name);
    cpp_fcall_stmt* init_name = new cpp_fcall_stmt(const_ref_string_type, receiver_var->get_ref(), "");
    init_name->add_param(name->get_ref());
    constr->add_init(init_name);
+   // Add new_signal_name var
+   cpp_var *new_sig_name = new cpp_var("new_sig_name", const_ref_string_type);
+   constr->add_param(new_sig_name);
+   cpp_fcall_stmt* init_changed_signal_name = new cpp_fcall_stmt(const_ref_string_type, signal_name->get_ref(), "");
+   init_changed_signal_name->add_param(new_sig_name->get_ref());
+   constr->add_init(init_changed_signal_name);
+   // Add new_timestamp var
+   cpp_var *new_timestamp = new cpp_var("new_timestamp", timestamp_type);
+   constr->add_param(new_timestamp);
+   cpp_fcall_stmt* init_timestamp = new cpp_fcall_stmt(const_ref_string_type, timestamp_var->get_ref(), "");
+   init_timestamp->add_param(new_timestamp->get_ref());
+   constr->add_init(init_timestamp);
+   // Add new_signal_value var
+   cpp_var *new_signal_value = new cpp_var("new_signal_value", timestamp_type);
+   constr->add_param(new_signal_value);
+   cpp_fcall_stmt* init_signal_value = new cpp_fcall_stmt(const_ref_string_type, signal_value->get_ref(), "");
+   init_signal_value->add_param(new_signal_value->get_ref());
+   constr->add_init(init_signal_value);
 }
 
-/*
- * TODO:
- * This function starts to be tough.
- * Refactory needed.
- */
 void cppClass::add_simulation_functions()
 {
-   // Create vars
+   // Start creating vars
+   // Signal var
+   cpp_type* string_type = new cpp_type(CPP_TYPE_STD_STRING);
    cpp_type* inside_input_map = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
-   inside_input_map->add_type(new cpp_type(CPP_TYPE_STD_STRING));
+   inside_input_map->add_type(string_type);
    cpp_var *inputvar = new cpp_var(INPUT_VAR_NAME, new cpp_type(CPP_TYPE_STD_MAP, inside_input_map));
-   inputvar->set_comment("std::map< signal_name, value >");
-   add_var(inputvar);
-   /*
-   cpp_type* output_vec = new cpp_type(CPP_TYPE_STD_VECTOR, new cpp_type(CPP_TYPE_STD_STRING));
-   cpp_type* output_map_type = new cpp_type(CPP_TYPE_STD_MAP, output_vec);
-   output_map_type->add_type(new cpp_type(CPP_TYPE_STD_STRING));
-   cpp_var *output_var = new cpp_var("hierarchy_", output_map_type);
-   output_var->set_comment("map< SimObj, vector<signals> >");
-   add_var(output_var);
-   */
-   cpp_type* output_vec = new cpp_type(CPP_TYPE_STD_VECTOR, new cpp_type(CPP_TYPE_STD_STRING));
-   cpp_var *output_var = new cpp_var(HIERARCHY_VAR_NAME, output_vec);
-   output_var->set_comment("vector<SimObj>");
-   add_var(output_var);
+   inputvar->set_comment("map< signal_name, value >");
+   // Output var
+   cpp_type* output_pair = new cpp_type(CPP_TYPE_STD_PAIR, string_type);
+   output_pair->add_type(string_type);
+   cpp_type* output_vec_pair = new cpp_type(CPP_TYPE_STD_VECTOR, output_pair);
+   cpp_type* output_map_type = new cpp_type(CPP_TYPE_STD_MAP, output_vec_pair);
+   output_map_type->add_type(string_type);
+   cpp_var *output_var = new cpp_var(HIERARCHY_VAR_NAME, output_map_type);
+   output_var->set_comment("map< mysignal, vector< pair< submodule, signals_in_submodule > > >");
+   // state var
    cpp_var *state_var = new cpp_var("state_", new cpp_type(CPP_TYPE_ELEMENT_STATE));
    state_var->set_comment("The State variable");
+   // End vars creation
+   // Start creating functions
+   // Create addInput function
+   cpp_type *void_type = new cpp_type(CPP_TYPE_VOID);
+   cpp_function *add_input_fun = new cpp_function("addInput", void_type);
+   cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
+   const_ref_string_type->set_const();
+   const_ref_string_type->set_reference();
+   cpp_var *input_name_var = new cpp_var("signal", const_ref_string_type);
+   add_input_fun->add_param(input_name_var);
+   cpp_fcall_stmt* emplace_fcall = new cpp_fcall_stmt(void_type, inputvar->get_ref(), "emplace");
+   cpp_type* no_type = new cpp_type(CPP_TYPE_NOTYPE);
+   emplace_fcall->add_param(new cpp_const_expr(input_name_var->get_name().c_str(), no_type));
+   emplace_fcall->add_param(new cpp_const_expr("boost::indeterminate", no_type));
+   add_input_fun->add_stmt(emplace_fcall);
+   add_input_fun->get_scope()->get_parent()->set_parent(&scope_);
+   // Create getState function
+   cpp_type *get_state_ret_type = new cpp_type(CPP_TYPE_WARPED_OBJECT_STATE);
+   get_state_ret_type->set_reference();
+   cpp_function *get_state_fun = new cpp_function("getState", get_state_ret_type);
+   get_state_fun->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, state_var->get_ref(), state_var->get_type()));
+   get_state_fun->set_override();
+   get_state_fun->set_virtual();
+   get_state_fun->get_scope()->get_parent()->set_parent(&scope_);
+   // End functions creation
+   // Add init list to the constructor
+   cpp_function* constr = get_costructor();
+   cpp_var *name = new cpp_var("name", const_ref_string_type);
+   constr->add_param(name);
+   cpp_var_ref* sim_obj = new cpp_var_ref("", new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT));
+   cpp_fcall_stmt* init_name = new cpp_fcall_stmt(new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT), sim_obj, "");
+   init_name->add_param(name->get_ref());
+   constr->add_init(init_name);
+   // Add all functions and vars created
+   // Add all variables
+   add_var(inputvar);
+   add_var(output_var);
    add_var(state_var);
+   // Add all functions
+   add_function(get_state_fun);
+   add_function(add_input_fun);
+}
+
+void cppClass::implement_simulation_functions()
+{
+   if(inherit_ == CPP_INHERIT_SIM_OBJ)
+   {
+      add_simulation_functions();
+      return;
+   }
+   // Add init list to the constructor
+   cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
+   cpp_function* constr = get_costructor();
+   cpp_var *name = new cpp_var("name", const_ref_string_type);
+   constr->add_param(name);
+   cpp_var_ref* sim_obj = new cpp_var_ref("", new cpp_type(CPP_TYPE_CUSTOM_BASE_CLASS));
+   cpp_fcall_stmt* init_name = new cpp_fcall_stmt(new cpp_type(CPP_TYPE_CUSTOM_BASE_CLASS), sim_obj, "");
+   init_name->add_param(name->get_ref());
+   constr->add_init(init_name);
+   // Create initial event function
    cpp_type *returnType = new cpp_type(CPP_TYPE_STD_VECTOR,
          new cpp_type(CPP_TYPE_SHARED_PTR,
          new cpp_type(CPP_TYPE_WARPED_EVENT)));
-   // Create initial event function
    cpp_function *init_fun = new cpp_function(WARPED_INIT_EVENT_FUN_NAME, returnType);
    init_fun->set_override();
    init_fun->set_virtual();
+   init_fun->get_scope()->get_parent()->set_parent(&scope_);
+   add_function(init_fun);
    // Create event handler function
    cpp_function *event_handler = new cpp_function(WARPED_HANDLE_EVENT_FUN_NAME, returnType);
    event_handler->set_override();
@@ -329,67 +442,73 @@ void cppClass::add_simulation_functions()
    event_type->set_const();
    cpp_var *event_param = new cpp_var("event", event_type);
    event_handler->add_param(event_param);
-   // Create getState function
-   cpp_type *get_state_ret_type = new cpp_type(CPP_TYPE_WARPED_OBJECT_STATE);
-   get_state_ret_type->set_reference();
-   cpp_function *get_state_fun = new cpp_function("getState", get_state_ret_type);
-   get_state_fun->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, state_var->get_ref(), state_var->get_type()));
-   get_state_fun->set_override();
-   get_state_fun->set_virtual();
-   // Add all functions to the class
-   add_function(init_fun);
-   add_function(get_state_fun);
-   add_function(event_handler);
-   // Add init list to the constructor
-   cpp_function* constr = get_costructor();
-   cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
-   const_ref_string_type->set_const();
-   const_ref_string_type->set_reference();
-   cpp_var *name = new cpp_var("name", const_ref_string_type);
-   constr->add_param(name);
-   cpp_var_ref* sim_obj = new cpp_var_ref("", new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT));
-   cpp_fcall_stmt* init_name = new cpp_fcall_stmt(new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT), sim_obj, "");
-   init_name->add_param(name->get_ref());
-   constr->add_init(init_name);
+   event_handler->get_scope()->get_parent()->set_parent(&scope_);
    // Add statements to functions
-   cpp_var *response_event = new cpp_var("response_events", returnType);
+   cpp_var *response_event = new cpp_var(RETURN_EVENT_LIST_VAR_NAME, event_handler->get_type());
    response_event->set_comment("Return value");
    event_handler->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, response_event->get_ref(), response_event->get_type()));
+   event_handler->get_scope()->add_decl(response_event);
    cpp_type *local_event_type = new cpp_type(CPP_TYPE_CUSTOM_EVENT);
    local_event_type->set_const();
    local_event_type->set_reference();
-   cpp_var *local_event = new cpp_var("my_event", local_event_type);
+   cpp_var *local_event = new cpp_var(CASTED_EVENT_VAR_NAME, local_event_type);
+   event_handler->get_scope()->add_decl(local_event);
    // Start handling the event
    cpp_assign_stmt *cast_stmt = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, local_event->get_ref(), local_event->get_type()), new cpp_unaryop_expr(CPP_UNARYOP_STATIC_CAST, event_param->get_ref(), local_event->get_type()));
    event_handler->add_stmt(cast_stmt);
+   add_function(event_handler);
+   //
+   cpp_type* string_type = new cpp_type(CPP_TYPE_STD_STRING);
+   // Retrieve all the vars and funs I need
+   cpp_var* inputvar = get_var(INPUT_VAR_NAME);
+   cpp_var* output_var = get_var(HIERARCHY_VAR_NAME);
    // Change my internal state according to the event received
    cpp_if * change_input_if = new cpp_if();
    cpp_binop_expr * cond_if = new cpp_binop_expr(CPP_BINOP_NEQ, local_event->get_type());
    cpp_fcall_stmt* find = new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "find");
-   cpp_fcall_stmt * new_signal = new cpp_fcall_stmt(const_ref_string_type, local_event->get_ref(), "signalName");
+   cpp_fcall_stmt * new_signal = new cpp_fcall_stmt(string_type, local_event->get_ref(), SIGNAL_NAME_GETTER_FUN_NAME);
    find->add_param(new_signal);
    cond_if->add_expr_front(find);
    cond_if->add_expr(new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "end"));
    change_input_if->set_condition(cond_if);
-   // Assign new input value inside the if
    event_handler->add_stmt(change_input_if);
+   // Here there are the implementation specific instructions
+   switch(type_)
+   {
+      case CPP_CLASS_MODULE:
+      default:
+         break;
+   }
    // Add the cycle that will create the events
-   cpp_type* input_type = new cpp_type(CPP_TYPE_STD_VECTOR, new cpp_type(CPP_TYPE_STD_STRING));
-   input_type->set_iterator();
-   cpp_var* iterator = new cpp_var ("it", input_type);
+   cpp_type* iterator_type = new cpp_type(*(output_var->get_type()));
+   iterator_type->set_iterator();
+   cpp_var* iterator = new cpp_var ("it", iterator_type);
    cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "begin"));
    cpp_for * push_event_for = new cpp_for();
    push_event_for->add_precycle(precycle);
-   cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, iterator->get_type());
+   cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, iterator_type);
    cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
    cond->add_expr(new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "end"));
    push_event_for->set_condition(cond);
    push_event_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
    cpp_fcall_stmt* add_event = new cpp_fcall_stmt(response_event->get_type(), new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, response_event->get_ref(), response_event->get_type()), "emplace_back");
    add_event->add_param(new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()));
+   add_event->add_param(new_signal);
+   add_event->add_param(new cpp_fcall_stmt(new cpp_type(CPP_TYPE_UNSIGNED_INT), local_event->get_ref(), WARPED_TIMESTAMP_FUN_NAME));
+   add_event->add_param(new cpp_fcall_stmt(new cpp_type(CPP_TYPE_BOOST_TRIBOOL), local_event->get_ref(), "newValue"));
    push_event_for->add_to_body(add_event);
    event_handler->add_stmt(push_event_for);
+   // Add the return statement
    event_handler->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, response_event->get_ref(), response_event->get_type()));
+}
+
+cpp_var* cppClass::get_var(const std::string &name) const
+{
+   cpp_decl* temp = scope_.get_decl(name);
+   assert(temp);
+   cpp_var* retvalue = dynamic_cast<cpp_var*>(temp);
+   assert(retvalue);
+   return retvalue;
 }
 
 cpp_function* cppClass::get_function(const std::string &name) const
@@ -400,6 +519,7 @@ cpp_function* cppClass::get_function(const std::string &name) const
    assert(retvalue);
    return retvalue;
 }
+
 
 void cpp_context::emit_after_classes(std::ostream &of, int level) const
 {
@@ -466,6 +586,7 @@ void cpp_context::emit_before_classes(std::ostream &of, int level) const
    if(!elem_parts_.empty())
       emit_children<cpp_var>(of, elem_parts_, indent(level), ";");
    of << "};";
+
    newline(of, level);
 }
 
@@ -478,6 +599,7 @@ void cppClass::add_to_inputs(cpp_var* item)
    add_event->add_param(new cpp_const_expr(item->get_name().c_str(), new cpp_type(CPP_TYPE_STD_STRING)));
    add_event->add_param(new cpp_const_expr("boost::indeterminate", new cpp_type(CPP_TYPE_NOTYPE)));
    constr->add_stmt(add_event);
+   // The following instruction is to avoid problems handling nexus
    get_scope()->add_visible(item);
 }
 
@@ -489,6 +611,7 @@ void cppClass::add_to_hierarchy(cpp_var* item)
    cpp_fcall_stmt* add_event = new cpp_fcall_stmt(hierarchy_var->get_type(), new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, new cpp_var_ref(hierarchy_var->get_name(), hierarchy_var->get_type()), hierarchy_var->get_type()), "emplace_back");
    add_event->add_param(new cpp_const_expr(item->get_name().c_str(), new cpp_type(CPP_TYPE_STD_STRING)));
    constr->add_stmt(add_event);
+   // The following instruction is to avoid problems handling nexus
    get_scope()->add_visible(item);
 }
 
@@ -496,24 +619,27 @@ void cppClass::emit(std::ostream &of, int level) const
 {
    newline(of, level);
    emit_comment(of, level);
+
    of << "class " << name_;
-   switch(type_)
+   switch(inherit_)
    {
-      case CPP_CLASS_WARPED_SIM_OBJ:
-      case CPP_CLASS_AND:
+      case CPP_INHERIT_SIM_OBJ:
          of << " : public warped::SimulationObject";
          break;
-      case CPP_CLASS_WARPED_EVENT:
+      case CPP_INHERIT_EVENT:
          of << " : public warped::Event";
          break;
+      case CPP_INHERIT_BASE_CLASS:
+         of << " : public " << BASE_CLASS_NAME;
+         break;
       default:
-         error("Class not handled yet");
+         break;
    }
    of << " {";
    newline(of, level);
    of << "public:";
 
-   emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ";");
+   emit_children<cpp_decl>(of, scope_.get_printable(), indent(level), ";");
 
    newline(of, level);
    of << "};";
@@ -533,6 +659,9 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
    switch (op_) {
    case CPP_UNARYOP_NOT:
        of << "not ";
+      break;
+   case CPP_UNARYOP_NEW:
+       of << "new ";
       break;
    case CPP_UNARYOP_STATIC_CAST:
        of << "static_cast<";
@@ -575,10 +704,24 @@ void cpp_fcall_stmt::emit(std::ostream &of, int level) const
 {
    base_->emit(of, level);
    if(!fun_name_.empty())
-      of << "." << fun_name_;
+   {
+      if(is_pointer_call)
+         of << "->" << fun_name_;
+      else
+         of << "." << fun_name_;
+   }
    of << "(";
    parameters_->emit(of, indent(level));
    of << ")";
+}
+
+cpp_var* cpp_function::get_var(const std::string &name) const
+{
+   cpp_decl* temp = variables_.get_decl(name);
+   assert(temp);
+   cpp_var* retvalue = dynamic_cast<cpp_var*>(temp);
+   assert(retvalue);
+   return retvalue;
 }
 
 void cpp_function::emit(std::ostream &of, int level) const
@@ -589,7 +732,7 @@ void cpp_function::emit(std::ostream &of, int level) const
       of << "virtual ";
    type_->emit(of, level);
    of << " " << name_ << " (";
-   emit_children<cpp_decl>(of, scope_.get_decls(), indent(level), ",", false);
+   emit_children<cpp_decl>(of, scope_.get_printable(), indent(level), ",", false);
    of << ")";
    if(isconst)
       of << " const";

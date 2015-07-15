@@ -1,7 +1,7 @@
 /*
- *  Helper functions for VHDL syntax elements.
+ *  Helper functions for C++ syntax elements.
  *
- *  Copyright (C) 2008-2012  Nick Gasson (nick@nickg.me.uk)
+ *  Copyright (C) 2015 Michele Castellana (michele.castellana@mail.polimi.it)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,8 +18,8 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef INC_VHDL_HELPER_HH
-#define INC_VHDL_HELPER_HH
+#ifndef INC_CPP_HELPER_HH
+#define INC_CPP_HELPER_HH
 
 #include <fstream>
 #include <list>

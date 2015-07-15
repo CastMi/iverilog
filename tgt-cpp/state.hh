@@ -1,5 +1,5 @@
 /*
- *  Managing global state for the VHDL code generator.
+ *  Managing global state for the C++ code generator.
  *
  *  Copyright (c) 2015 Michele Castellana (michele.castellana@mail.polimi.it)
  *
@@ -36,11 +36,13 @@ cpp_scope *find_scope_for_signal(ivl_signal_t sig);
 const std::string &get_renamed_signal(ivl_signal_t sig);
 ivl_signal_t find_signal_named(const std::string &name, const cpp_scope *scope);
 
-void only_remember_class(cppClass* theclass);
+void remember_logic(cpp_class_type type);
 void remember_class(cppClass *ent, ivl_scope_t scope);
 cppClass* find_class(ivl_scope_t scope);
 cppClass* find_class(const std::string& name);
 
+void build_basic_classes();
+void build_net();
 void emit_everything(std::ostream& os);
 void free_all_cpp_objects();
 
@@ -51,4 +53,4 @@ void set_active_class(cppClass *ent);
 bool is_default_scope_instance(ivl_scope_t s);
 bool seen_this_scope_type(ivl_scope_t s);
 
-#endif  // #ifndef INC_VHDL_STATE_HH
+#endif  // #ifndef INC_CPP_STATE_HH

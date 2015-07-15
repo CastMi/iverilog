@@ -92,9 +92,10 @@ extern "C" int target_design(ivl_design_t des)
 
    g_design = des;
 
+   build_basic_classes();
    for (unsigned int i = 0; i < nroots; i++)
       draw_scope(roots[i], NULL);
-   draw_main();
+   build_net();
 
    // Only generate processes if there were no errors generating entities
    // (otherwise the necessary information won't be present)

@@ -25,7 +25,7 @@
 #include <sstream>
 #include <iostream>
 
-std::string cpp_type::tostring(cpp_type_name_t type)
+std::string cpp_type::tostring(const cpp_type_name_t type)
 {
    switch(type)
    {
@@ -33,12 +33,16 @@ std::string cpp_type::tostring(cpp_type_name_t type)
          return std::string("warped::Event");
        case CPP_TYPE_WARPED_OBJECT_STATE:
          return std::string("warped::ObjectState");
+       case CPP_TYPE_VOID:
+         return std::string("void");
        case CPP_TYPE_WARPED_SIMULATION_OBJECT:
          return std::string("warped::SimulationObject");
        case CPP_TYPE_WARPED_SIMULATION:
          return std::string("warped::Simulation");
        case CPP_TYPE_CUSTOM_EVENT:
          return std::string(CUSTOM_EVENT_CLASS_NAME);
+       case CPP_TYPE_CUSTOM_BASE_CLASS:
+         return std::string(BASE_CLASS_NAME);
        case CPP_TYPE_ELEMENT_STATE:
          return std::string("ElementState");
       case CPP_TYPE_INT:
@@ -68,6 +72,9 @@ std::string cpp_type::get_string() const
        case CPP_TYPE_WARPED_EVENT:
          returnvalue += "warped::Event";
          break;
+       case CPP_TYPE_VOID:
+         returnvalue += "void";
+         break;
        case CPP_TYPE_WARPED_OBJECT_STATE:
          returnvalue += "warped::ObjectState";
          break;
@@ -76,6 +83,9 @@ std::string cpp_type::get_string() const
          break;
        case CPP_TYPE_CUSTOM_EVENT:
          returnvalue += CUSTOM_EVENT_CLASS_NAME;
+         break;
+       case CPP_TYPE_CUSTOM_BASE_CLASS:
+         returnvalue += BASE_CLASS_NAME;
          break;
        case CPP_TYPE_WARPED_SIMULATION_OBJECT:
          returnvalue += "warped::SimulationObject";
@@ -100,6 +110,8 @@ std::string cpp_type::get_string() const
    }
    if(isreference)
       returnvalue += "&";
+   if(ispointer)
+      returnvalue += "*";
    return returnvalue;
 }
 

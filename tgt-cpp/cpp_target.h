@@ -15,7 +15,6 @@ using namespace std;
 void error(const char *fmt, ...);
 void debug_msg(const char *fmt, ...);
 
-void draw_main();
 int draw_scope(ivl_scope_t scope, void *_parent);
 extern "C" int draw_process(ivl_process_t net, void *cd);
 void draw_nexus(ivl_nexus_t nexus);
@@ -26,4 +25,4 @@ string make_safe_name(ivl_signal_t sig);
 void require_support_function(support_function_t f);
 void draw_logic(cppClass *arch, ivl_net_logic_t log);
 
-#endif /* #ifndef INC_VHDL_TARGET_H */
+#endif /* #ifndef INC_CPP_TARGET_H */

@@ -29,9 +29,10 @@
 
 using namespace std;
 
-#define WARPED_INIT_EVENT_FUN_NAME "createInitialEvents"
-#define WARPED_HANDLE_EVENT_FUN_NAME "receiveEvent"
+// Name of the Event class used
 #define CUSTOM_EVENT_CLASS_NAME "EventClass"
+// Name of the class that every SimulationObject will inherit
+#define BASE_CLASS_NAME "Port"
 
 class cpp_scope;
 class cppClass;
@@ -48,6 +49,8 @@ class cpp_expr : public cpp_element, public cpp_stmt {
 public:
     cpp_expr(const cpp_type* type)
       : type_(type) {}
+    cpp_expr(const cpp_type_name_t type)
+      : type_(new cpp_type(type)) {}
    virtual ~cpp_expr() {};
 
    const cpp_type *get_type() const { return type_; }
@@ -85,6 +88,8 @@ class cpp_var_ref : public cpp_expr {
 public:
    cpp_var_ref(const string& name, const cpp_type *type)
       : cpp_expr(type), name_(name) {}
+   cpp_var_ref(const string& name, const cpp_type_name_t type)
+      : cpp_expr(type), name_(name) {}
    ~cpp_var_ref() {};
 
    void emit(std::ostream &of, int level = 0) const;
@@ -101,7 +106,7 @@ private:
  */
 class cpp_binop_expr : public cpp_expr {
 public:
-   cpp_binop_expr(cpp_binop_t op, const cpp_type *type)
+   cpp_binop_expr(const cpp_binop_t op, const cpp_type *type)
       : cpp_expr(type), op_(op) {}
    cpp_binop_expr(cpp_expr *left, cpp_binop_t op,
                    cpp_expr *right, const cpp_type *type)
@@ -118,23 +123,24 @@ public:
 
 private:
    std::list<cpp_expr*> operands_;
-   cpp_binop_t op_;
+   const cpp_binop_t op_;
 };
 
 enum cpp_unaryop_t {
-   CPP_UNARYOP_NOT,
    CPP_UNARYOP_ADD,
-   CPP_UNARYOP_RETURN,
-   CPP_UNARYOP_DEREF,
    CPP_UNARYOP_DECL,
-   CPP_UNARYOP_STATIC_CAST,
+   CPP_UNARYOP_DEREF,
    CPP_UNARYOP_LITERAL,
-   CPP_UNARYOP_NEG
+   CPP_UNARYOP_NEG,
+   CPP_UNARYOP_NEW,
+   CPP_UNARYOP_NOT,
+   CPP_UNARYOP_RETURN,
+   CPP_UNARYOP_STATIC_CAST
 };
 
 class cpp_unaryop_expr : public cpp_expr {
 public:
-   cpp_unaryop_expr(cpp_unaryop_t op, cpp_var_ref *operand,
+   cpp_unaryop_expr(const cpp_unaryop_t op, cpp_expr *operand,
       const cpp_type *type)
       : cpp_expr(type), op_(op), operand_(operand) {}
    ~cpp_unaryop_expr() {};
@@ -142,8 +148,8 @@ public:
    void emit(std::ostream &of, int level) const;
 
 private:
-   cpp_unaryop_t op_;
-   cpp_var_ref *operand_;
+   const cpp_unaryop_t op_;
+   cpp_expr *operand_;
 };
 
 class cpp_expr_list : public cpp_expr {
@@ -160,13 +166,15 @@ private:
 
 class cpp_const_expr : public cpp_expr {
 public:
-   cpp_const_expr(const char *op, cpp_type *type)
-      : cpp_expr(type), value_(op) {}
+   cpp_const_expr(const char *exp, const cpp_type *type)
+      : cpp_expr(type), value_(exp) {}
+   cpp_const_expr(const char *exp, const cpp_type_name_t type)
+      : cpp_expr(type), value_(exp) {}
    ~cpp_const_expr() {};
 
    void emit(std::ostream &of, int level) const;
 private:
-   std::string value_;
+   const std::string value_;
 };
 
 /*
@@ -174,8 +182,10 @@ private:
  */
 class cpp_decl : public cpp_element {
 public:
-   cpp_decl(const string& name, const cpp_type *type = NULL)
+   cpp_decl(const string& name, const cpp_type *type)
       : name_(name), type_(type) {}
+   cpp_decl(const string& name, const cpp_type_name_t type)
+      : name_(name), type_(new cpp_type(type)) {}
    virtual ~cpp_decl() {};
 
    const std::string &get_name() const { return name_; }
@@ -194,10 +204,8 @@ public:
    // This does nothing for most declaration types
    virtual void ensure_readable() {}
 protected:
-   std::string name_;
+   const std::string name_;
    const cpp_type *type_;
-   // TODO: flag to understand wheter it is private or not.
-   // bool isprivate;
 };
 
 /*
@@ -207,6 +215,9 @@ class cpp_var : public cpp_decl {
 public:
    cpp_var(const string& name, const cpp_type* type)
       : cpp_decl(name, type), ref_to_this_var(NULL) {}
+   cpp_var(const string& name, const cpp_type_name_t type)
+      : cpp_decl(name, type), ref_to_this_var(NULL) {}
+
    virtual void emit(std::ostream &of, int level) const;
    cpp_var_ref* get_ref();
 
@@ -225,14 +236,14 @@ public:
 
    void add_decl(cpp_decl *decl);
    void add_visible(cpp_decl *decl);
-   cpp_decl *get_decl(const std::string &name) const;
+   cpp_decl* get_decl(const std::string &name) const;
    bool have_declared(const std::string &name) const;
    bool name_collides(const string& name) const;
    bool contained_within(const cpp_scope *other) const;
-   cpp_scope *get_parent() const;
+   cpp_scope* get_parent() const;
 
    bool empty() const { return to_print_.empty(); }
-   const std::list<cpp_decl*> &get_decls() const { return to_print_; }
+   const std::list<cpp_decl*> &get_printable() const { return to_print_; }
    void set_parent(cpp_scope *p) { parent_ = p; }
 
 private:
@@ -250,7 +261,7 @@ private:
 class cpp_fcall_stmt : public cpp_expr {
 public:
    cpp_fcall_stmt(const cpp_type* ret_type, cpp_expr * base, const std::string& fun_name)
-      : cpp_expr(ret_type), base_(base), fun_name_(fun_name)
+      : cpp_expr(ret_type), base_(base), is_pointer_call(false), fun_name_(fun_name)
    {
       parameters_ = new cpp_expr_list();
    }
@@ -258,12 +269,14 @@ public:
 
    virtual void emit(std::ostream &of, int level = 0) const;
    virtual void add_param(cpp_expr* el) { parameters_->add_cpp_expr(el); };
+   void set_pointer_call() { is_pointer_call = true; };
 
 protected:
    cpp_expr *base_;
+   bool is_pointer_call;
    // The parameters could be constant or reference to variable
    cpp_expr_list* parameters_;
-   std::string fun_name_;
+   const std::string fun_name_;
 };
 
 /*
@@ -271,7 +284,7 @@ protected:
  */
 class cpp_if : public cpp_stmt {
 public:
-   cpp_if(cpp_expr * condition) : condition_(condition) {};
+   cpp_if(cpp_expr* condition) : condition_(condition) {};
    cpp_if() : condition_(NULL) {};
    ~cpp_if() {};
 
@@ -326,6 +339,8 @@ class cpp_procedural : public cpp_decl {
 public:
    cpp_procedural(const char *name, cpp_type *ret_type)
       : cpp_decl(name, ret_type) {}
+   cpp_procedural(const char *name, const cpp_type_name_t ret_type)
+      : cpp_decl(name, ret_type) {}
    virtual ~cpp_procedural() {}
 
    virtual cpp_scope *get_scope() { return &scope_; }
@@ -348,6 +363,7 @@ public:
    void emit_after_classes(std::ostream &of, int level = 0) const;
    void emit_before_classes(std::ostream &of, int level = 0) const;
    void add_stmt(cpp_stmt* el) { statements_.push_back(el); };
+   void add_stmt(std::list<cpp_stmt*> el) { statements_.splice(statements_.end(), el); };
    void add_var_to_state(cpp_var* el) { elem_parts_.push_back(el); };
 
 private:
@@ -361,7 +377,17 @@ class cpp_function : public cpp_procedural {
 public:
    cpp_function(const char *name, cpp_type *ret_type)
       : cpp_procedural(name, ret_type), isconst(false), isvirtual(false),
-      isoverride(false)
+      isoverride(false), isconstructor(false)
+   {
+      // A function contains two scopes:
+      // scope_ = The parameters
+      // variables_ = Local variables
+      // A call to get_scope returns variables_ whose parent is scope_
+      variables_.set_parent(&scope_);
+   }
+   cpp_function(const char *name, const cpp_type_name_t ret_type)
+      : cpp_procedural(name, new cpp_type(ret_type)), isconst(false),
+      isvirtual(false), isoverride(false), isconstructor(false)
    {
       // A function contains two scopes:
       // scope_ = The parameters
@@ -375,6 +401,7 @@ public:
    void set_override() { isoverride = true; }
    void add_init(cpp_fcall_stmt* el) { init_list_.push_back(el); }
    void set_const() { isconst = true; }
+   cpp_var* get_var(const std::string &name) const;
    void set_virtual() { isvirtual = true; }
    void set_constructor() { isconstructor = true; }
 
@@ -385,10 +412,22 @@ private:
    bool isconst, isvirtual, isoverride, isconstructor;
 };
 
+/*
+ * All the logic gate supported.
+ * CPP_CLASS_MODULE is a special value. It means that
+ * the corrisponding class is not a logic gate but a
+ * general module.
+ */
 enum cpp_class_type {
-   CPP_CLASS_WARPED_EVENT,
+   CPP_CLASS_MODULE,
    CPP_CLASS_AND,
-   CPP_CLASS_WARPED_SIM_OBJ
+   CPP_CLASS_OR
+};
+
+enum cpp_inherit_class {
+   CPP_INHERIT_BASE_CLASS,
+   CPP_INHERIT_EVENT,
+   CPP_INHERIT_SIM_OBJ
 };
 
 /*
@@ -396,30 +435,37 @@ enum cpp_class_type {
  */
 class cppClass : public cpp_element {
 public:
-   cppClass(const string& name, cpp_class_type in = CPP_CLASS_WARPED_SIM_OBJ);
+   cppClass(const string& name, const cpp_inherit_class type = CPP_INHERIT_BASE_CLASS);
+   cppClass(const string& name, const cpp_class_type lg);
    virtual ~cppClass() {};
 
    void emit(std::ostream &of, int level = 0) const;
    const std::string &get_name() const { return name_; }
    void add_var(cpp_var *item) { scope_.add_decl(item); }
+   void add_visible(cpp_decl *item) { scope_.add_visible(item); }
    void add_to_inputs(cpp_var *item);
    void add_to_hierarchy(cpp_var *item);
    void add_function(cpp_procedural* fun) { scope_.add_decl(fun); };
    cpp_class_type get_type() const { return type_; };
+   cpp_inherit_class get_inherited() const { return inherit_; };
 
    cpp_scope *get_scope() { return &scope_; }
    cpp_function* get_costructor() { return get_function(name_); };
    cpp_function* get_function(const std::string &name) const;
+   cpp_var* get_var(const std::string &name) const;
 
 private:
    void add_simulation_functions();
+   void implement_simulation_functions();
    void add_event_functions();
 
-   static unsigned and_port_num_;
    // Class name
    std::string name_;
    cpp_scope scope_;
-   cpp_class_type type_;
+   // This variable contain the information about the to inherit.
+   const cpp_inherit_class inherit_;
+   // This variable contain the information about wich kind of SimulationObject you are.
+   const cpp_class_type type_;
 };
 
 typedef std::list<cppClass*> entity_list_t;

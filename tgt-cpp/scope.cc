@@ -339,29 +339,7 @@ static void declare_one_signal(cppClass *theclass, ivl_signal_t sig,
    ivl_signal_port_t mode = ivl_signal_port(sig);
    switch (mode) {
    case IVL_SIP_NONE:
-      {
-         cpp_var *var = new cpp_var(name, sig_type);
-
-         ostringstream ss;
-         if (ivl_signal_local(sig)) {
-               ss << "Temporary created at " << ivl_signal_file(sig) << ":"
-                  << ivl_signal_lineno(sig);
-         } else {
-            ss << "Declared at " << ivl_signal_file(sig) << ":"
-               << ivl_signal_lineno(sig);
-         }
-         var->set_comment(ss.str().c_str());
-
-         theclass->add_var(var);
-      }
-         break;
    case IVL_SIP_OUTPUT:
-      {
-         cpp_var *var = new cpp_var(name, sig_type);
-         var->set_comment("Output var");
-         theclass->add_var(var);
-      }
-         break;
    case IVL_SIP_INPUT:
       {
          cpp_var *var = new cpp_var(name, sig_type);
@@ -575,26 +553,5 @@ int draw_scope(ivl_scope_t scope, void *_parent)
       return rc;
    
    return 0;
-}
-
-void draw_main()
-{
-   // Create event class
-   cppClass *theclass = new cppClass(CUSTOM_EVENT_CLASS_NAME, CPP_CLASS_WARPED_EVENT);
-   theclass->set_comment("Created to store information about the triggered event");
-   only_remember_class(theclass);
-
-   // Create main method
-   cpp_var_ref* lhs = new cpp_var_ref("this_sim", new cpp_type(CPP_TYPE_WARPED_SIMULATION));
-   cpp_unaryop_expr* unary = new cpp_unaryop_expr(CPP_UNARYOP_DECL, lhs, lhs->get_type());
-   // parameters list
-   cpp_expr_list* rhs = new cpp_expr_list();
-   rhs->add_cpp_expr(new cpp_const_expr("Logic simulation", new cpp_type(CPP_TYPE_STD_STRING)));
-   rhs->add_cpp_expr(new cpp_var_ref("argc", new cpp_type(CPP_TYPE_NOTYPE)));
-   rhs->add_cpp_expr(new cpp_var_ref("argv", new cpp_type(CPP_TYPE_NOTYPE)));
-   cpp_assign_stmt* stmt = new cpp_assign_stmt(unary, rhs, true);
-   cpp_context * main = get_context();
-   main->add_stmt(stmt);
-   // from now on, I should manage the net
 }
 

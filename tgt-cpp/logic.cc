@@ -21,22 +21,23 @@
 #include "cpp_target.h"
 #include "cpp_element.hh"
 #include "state.hh"
+#include "hierarchy.hh"
 #include "cpp_type.hh"
 
 #include <cassert>
 #include <sstream>
 #include <iostream>
 
-static cppClass* inputs_to_expr(cppClass *theclass, cpp_class_type,
+static void inputs_to_expr(cppClass *theclass, cpp_class_type type,
                                  ivl_net_logic_t log)
 {
-   cppClass *theop = new cppClass(theclass->get_name(), CPP_CLASS_AND);
-
+   remember_logic(type);
+   submodule *temp = new submodule(type);
    // The single output
    ivl_nexus_t output = ivl_logic_pin(log, 0);
    assert(output);
    cpp_var_ref* tmp = readable_ref(theclass->get_scope(), output);
-   theop->add_var(new cpp_var(tmp->get_name(), tmp->get_type()));
+   temp->insert_output(tmp->get_name());
    
    // All the inputs
    int npins = ivl_logic_pins(log);
@@ -45,13 +46,10 @@ static cppClass* inputs_to_expr(cppClass *theclass, cpp_class_type,
       assert(pin);
 
       tmp = readable_ref(theclass->get_scope(), pin);
-      // FIXME:
-      // The following istruction is correct but more work is needed in order
-      // to have it running properly
-      //theop->add_to_inputs(new cpp_var(tmp->get_name(), tmp->get_type()));
+      temp->insert_input(tmp->get_name(), tmp->get_name());
    }
 
-   return theop;
+   add_submodule_to(theclass->get_name(), temp);
 }
 
 static cppClass* input_to_expr(cppClass *theclass, cpp_unaryop_t,
@@ -70,17 +68,19 @@ static cppClass* input_to_expr(cppClass *theclass, cpp_unaryop_t,
    return theop;
 }
 
-static cppClass *translate_logic(cppClass *theclass, ivl_net_logic_t log)
+void translate_logic(cppClass *theclass, ivl_net_logic_t log)
 {
    switch (ivl_logic_type(log)) {
    case IVL_LO_AND:
    case IVL_LO_OR:
-      return inputs_to_expr(theclass, CPP_CLASS_AND, log);
-   case IVL_LO_NOT:
    case IVL_LO_NAND:
    case IVL_LO_NOR:
    case IVL_LO_XOR:
    case IVL_LO_XNOR:
+      // FIXME: right now they are translated as AND
+      inputs_to_expr(theclass, CPP_CLASS_AND, log);
+      return;
+   case IVL_LO_NOT:
    case IVL_LO_PULLUP:
    case IVL_LO_PULLDOWN:
    case IVL_LO_BUF:
@@ -89,7 +89,7 @@ static cppClass *translate_logic(cppClass *theclass, ivl_net_logic_t log)
    default:
       error("Don't know how to translate type %d to expression",
             ivl_logic_type(log));
-      return NULL;
+      return;
    }
 }
 
@@ -107,9 +107,7 @@ void draw_logic(cppClass *theclass, ivl_net_logic_t log)
       }
    default:
       {
-         cppClass *logic = translate_logic(theclass, log);
-         theclass->add_to_hierarchy(new cpp_var(logic->get_name(), new cpp_type(CPP_TYPE_STD_STRING)));
-         only_remember_class(logic);
+         translate_logic(theclass, log);
       }
    }
 }

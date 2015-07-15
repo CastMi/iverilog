@@ -21,6 +21,7 @@
 #include "state.hh"
 #include "cpp_syntax.hh"
 #include "cpp_target.h"
+#include "hierarchy.hh"
 
 #include <algorithm>
 #include <string>
@@ -28,6 +29,7 @@
 #include <vector>
 #include <cstring>
 #include <iostream>
+#include <iterator>
 
 using namespace std;
 
@@ -55,7 +57,6 @@ static map<ivl_scope_t, string> g_scope_names;
 typedef std::map<ivl_signal_t, signal_defn_t> signal_defn_map_t;
 static signal_defn_map_t g_known_signals;
 
-
 static cppClass *g_active_class = NULL;
 
 // Set of scopes that are treated as the default examples of
@@ -65,6 +66,15 @@ static default_scopes_t g_default_scopes;
 
 // There is one and only one context
 static cpp_context *context = new cpp_context();
+
+// This variable contain the set of logic gate
+// that the design needs in order to run
+static std::set<cpp_class_type> design_logic;
+
+void remember_logic(cpp_class_type type)
+{
+   design_logic.insert(type);
+}
 
 cpp_context* get_context()
 {
@@ -113,6 +123,49 @@ const std::string &get_renamed_signal(ivl_signal_t sig)
    assert(seen_signal_before(sig));
 
    return g_known_signals[sig].renamed;
+}
+
+static void only_remember_class(cppClass* theclass)
+{
+   /*
+    * The first 2 classes added are the event class and
+    * the base class. They NEED to stay on top on the others.
+    */
+   if(g_classes.size() <= 1)
+   {
+      g_classes.push_front(theclass);
+      return;
+   }
+   std::list<cppClass*>::iterator it = g_classes.begin();
+   std::advance(it,2);
+   g_classes.insert(it, theclass);
+}
+
+/*
+ * Create the base functions that every design needs to have
+ */
+void build_basic_classes()
+{
+   // Create the base class
+   cppClass *thebaseclass = new cppClass(BASE_CLASS_NAME, CPP_INHERIT_SIM_OBJ);
+   thebaseclass->set_comment("Created to implements basic functions");
+   only_remember_class(thebaseclass);
+   // Create the event class
+   cppClass *theeventclass = new cppClass(CUSTOM_EVENT_CLASS_NAME, CPP_INHERIT_EVENT);
+   theeventclass->set_comment("Created to store information about the triggered event");
+   only_remember_class(theeventclass);
+}
+
+void build_net()
+{
+   // Create all the logic gate classes
+   for(std::set<cpp_class_type>::iterator it = design_logic.begin();
+         it != design_logic.end(); it++)
+   {
+      only_remember_class(new cppClass("", *it));
+   }
+   cpp_context * main = get_context();
+   main->add_stmt(build_hierarchy(g_classes));
 }
 
 // TODO: Can we dispose of this???
@@ -188,11 +241,6 @@ cppClass* find_class(ivl_scope_t scope)
    }
 }
 
-void only_remember_class(cppClass* theclass)
-{
-   g_classes.push_front(theclass);
-}
-
 // Add the class to the list of classes to emit.
 void remember_class(cppClass* theclass, ivl_scope_t scope)
 {
@@ -220,10 +268,10 @@ void emit_everything(std::ostream& os)
 void free_all_cpp_objects()
 {
    int freed = cpp_element::free_all_objects();
-   debug_msg("Deallocated %d VHDL syntax objects", freed);
+   debug_msg("Deallocated %d C++ syntax objects", freed);
 
    size_t total = cpp_element::total_allocated();
-   debug_msg("%d total bytes used for VHDL syntax objects", total);
+   debug_msg("%d total bytes used for C++ syntax objects", total);
 
    g_classes.clear();
 }
