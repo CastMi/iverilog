@@ -33,6 +33,10 @@ using namespace std;
 #define CUSTOM_EVENT_CLASS_NAME "EventClass"
 // Name of the class that every SimulationObject will inherit
 #define BASE_CLASS_NAME "Port"
+// Name of the function to add a signal
+#define ADD_SIGNAL_FUN_NAME "addSignal"
+// Name of the function to add an output
+#define ADD_OUTPUT_FUN_NAME "addOutput"
 
 class cpp_scope;
 class cppClass;
@@ -254,14 +258,14 @@ private:
    cpp_scope *parent_;
 };
 
-
 /*
  * A function call statement
  */
 class cpp_fcall_stmt : public cpp_expr {
 public:
    cpp_fcall_stmt(const cpp_type* ret_type, cpp_expr * base, const std::string& fun_name)
-      : cpp_expr(ret_type), base_(base), is_pointer_call(false), fun_name_(fun_name)
+      : cpp_expr(ret_type), base_(base), is_pointer_call(false),
+      is_function_call(true), member_name_(fun_name)
    {
       parameters_ = new cpp_expr_list();
    }
@@ -270,25 +274,24 @@ public:
    virtual void emit(std::ostream &of, int level = 0) const;
    virtual void add_param(cpp_expr* el) { parameters_->add_cpp_expr(el); };
    void set_pointer_call() { is_pointer_call = true; };
+   void set_member_access() { is_function_call = false; };
 
 protected:
    cpp_expr *base_;
-   bool is_pointer_call;
-   // The parameters could be constant or reference to variable
+   bool is_pointer_call, is_function_call;
    cpp_expr_list* parameters_;
-   const std::string fun_name_;
+   const std::string member_name_;
 };
 
 /*
- * A cycle
+ * Every conditional statement should inherit from this class.
  */
-class cpp_if : public cpp_stmt {
+class cpp_conditional : public cpp_stmt {
 public:
-   cpp_if(cpp_expr* condition) : condition_(condition) {};
-   cpp_if() : condition_(NULL) {};
-   ~cpp_if() {};
+   cpp_conditional(cpp_expr* condition) : condition_(condition) {};
+   cpp_conditional() : condition_(NULL) {};
+   ~cpp_conditional() {};
 
-   virtual void emit(std::ostream &of, int level = 0) const;
    void add_to_body(cpp_expr* item) { statements_.push_back(item); };
    void set_condition(cpp_expr* p);
 
@@ -298,12 +301,27 @@ protected:
 };
 
 /*
- * A cycle.
- * This class inherits from the if class only for simplicity
+ * An if statement.
  */
-class cpp_for : public cpp_if {
+class cpp_if : public cpp_conditional {
 public:
-   cpp_for(cpp_expr * condition) : cpp_if(condition) {};
+   cpp_if(cpp_expr* condition) : cpp_conditional(condition) {};
+   cpp_if() {};
+   ~cpp_if() {};
+
+   virtual void emit(std::ostream &of, int level = 0) const;
+   void add_to_else_body(cpp_expr* item) { else_statements_.push_back(item); };
+
+protected:
+   std::list<cpp_stmt*> else_statements_;
+};
+
+/*
+ * A cycle.
+ */
+class cpp_for : public cpp_conditional {
+public:
+   cpp_for(cpp_expr * condition) : cpp_conditional(condition) {};
    cpp_for() {};
    ~cpp_for() {};
 

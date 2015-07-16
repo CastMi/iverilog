@@ -510,7 +510,6 @@ extern "C" int draw_hierarchy(ivl_scope_t scope, void *_parent)
 
       cppClass *parent_ent = find_class(parent);
       assert(parent_ent);
-
       
       // And an instantiation statement
       string inst_name = ivl_scope_basename(scope);

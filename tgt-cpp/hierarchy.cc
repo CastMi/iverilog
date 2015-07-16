@@ -125,7 +125,8 @@ std::list<cpp_stmt*> build_hierarchy(std::list<cppClass*> class_list)
          module_lhs = new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, module, port_pointer_type);
       cpp_const_expr* module_name = new cpp_const_expr((*class_it)->get_name().c_str(), no_type);
       cpp_fcall_stmt* module_constr = new cpp_fcall_stmt(no_type, module_name, "");
-      module_constr->add_param(new cpp_const_expr(get_unique_name((*class_it)->get_type()).c_str(), string_type));
+      cpp_const_expr* class_name_const = new cpp_const_expr(get_unique_name((*class_it)->get_type()).c_str(), string_type);
+      module_constr->add_param(class_name_const);
       cpp_unaryop_expr* module_rhs = new cpp_unaryop_expr(CPP_UNARYOP_NEW, module_constr, port_pointer_type);
       cpp_assign_stmt* module_stmt = new cpp_assign_stmt(module_lhs, module_rhs);
       return_value.push_back(module_stmt);
@@ -144,18 +145,18 @@ std::list<cpp_stmt*> build_hierarchy(std::list<cppClass*> class_list)
          }
          else
             unary = new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, new_object, port_pointer_type);
-         cpp_const_expr* class_name = new cpp_const_expr(get_class_name((*submod_it)->type).c_str(), no_type);
-         cpp_fcall_stmt* port_constr = new cpp_fcall_stmt(no_type, class_name, "");
+         cpp_const_expr* class_name_lhs = new cpp_const_expr(get_class_name((*submod_it)->type).c_str(), no_type);
+         cpp_fcall_stmt* port_constr = new cpp_fcall_stmt(no_type, class_name_lhs, "");
          port_constr->add_param(new cpp_const_expr(get_unique_name((*submod_it)->type).c_str(), string_type));
          cpp_unaryop_expr* new_stmt = new cpp_unaryop_expr(CPP_UNARYOP_NEW, port_constr, port_pointer_type);
          cpp_assign_stmt* stmt = new cpp_assign_stmt(unary, new_stmt);
          return_value.push_back(stmt);
-         // Add all the inputs to the submodules
+         // Add all the inputs
          for(std::list<std::pair<std::string, std::string> >::iterator input_it = (*submod_it)->signal_mapping.begin();
                input_it != (*submod_it)->signal_mapping.end(); input_it++ )
          {
             // Add all inputs to the port
-            cpp_fcall_stmt* add_in_to_port = new cpp_fcall_stmt(no_type, new_object, "addInput");
+            cpp_fcall_stmt* add_in_to_port = new cpp_fcall_stmt(no_type, new_object, ADD_SIGNAL_FUN_NAME);
             add_in_to_port->set_pointer_call();
             add_in_to_port->add_param(new cpp_const_expr((*input_it).second.c_str(), string_type));
             return_value.push_back(add_in_to_port);
@@ -163,16 +164,20 @@ std::list<cpp_stmt*> build_hierarchy(std::list<cppClass*> class_list)
          for(std::list<std::string>::iterator output_it = (*submod_it)->output_name.begin();
                output_it != (*submod_it)->output_name.end(); output_it++ )
          {
-            // Add all the outputs to the port
-            cpp_fcall_stmt* add_out_to_port = new cpp_fcall_stmt(no_type, new_object, "addOutput");
+            // Add all the outputs
+            cpp_fcall_stmt* add_out_to_port = new cpp_fcall_stmt(no_type, new_object, ADD_OUTPUT_FUN_NAME);
             add_out_to_port->set_pointer_call();
+            add_out_to_port->add_param(new cpp_const_expr((*output_it).c_str(), string_type));
+            add_out_to_port->add_param(class_name_const);
             add_out_to_port->add_param(new cpp_const_expr((*output_it).c_str(), string_type));
             return_value.push_back(add_out_to_port);
          }
+         // We have added input/output. Now, add the submodule
          cpp_fcall_stmt* push_port = new cpp_fcall_stmt(no_type, obj_pointers_literal, "push_back");
          push_port->add_param(new_object);
          return_value.push_back(push_port);
       }
+      // Push the module
       cpp_fcall_stmt* push_module = new cpp_fcall_stmt(no_type, obj_pointers_literal, "push_back");
       push_module->add_param(module);
       return_value.push_back(push_module);

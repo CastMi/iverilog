@@ -367,9 +367,9 @@ void cppClass::add_simulation_functions()
    state_var->set_comment("The State variable");
    // End vars creation
    // Start creating functions
-   // Create addInput function
+   // Create the function to add a signal
    cpp_type *void_type = new cpp_type(CPP_TYPE_VOID);
-   cpp_function *add_input_fun = new cpp_function("addInput", void_type);
+   cpp_function *add_input_fun = new cpp_function(ADD_SIGNAL_FUN_NAME, void_type);
    cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
    const_ref_string_type->set_const();
    const_ref_string_type->set_reference();
@@ -381,6 +381,18 @@ void cppClass::add_simulation_functions()
    emplace_fcall->add_param(new cpp_const_expr("boost::indeterminate", no_type));
    add_input_fun->add_stmt(emplace_fcall);
    add_input_fun->get_scope()->get_parent()->set_parent(&scope_);
+   // Create the function to add an output
+   cpp_function *add_output_fun = new cpp_function(ADD_OUTPUT_FUN_NAME, void_type);
+   cpp_fcall_stmt* add_out_fcall = new cpp_fcall_stmt(void_type, inputvar->get_ref(), "emplace");
+   cpp_var *signal1 = new cpp_var("local_signal", const_ref_string_type);
+   cpp_var *signal2 = new cpp_var("submodule", const_ref_string_type);
+   cpp_var *signal3 = new cpp_var("module_signal", const_ref_string_type);
+   add_output_fun->add_param(signal1);
+   add_output_fun->add_param(signal2);
+   add_output_fun->add_param(signal3);
+   add_out_fcall->add_param(new cpp_const_expr(input_name_var->get_name().c_str(), no_type));
+   add_out_fcall->add_param(new cpp_const_expr("boost::indeterminate", no_type));
+   add_output_fun->get_scope()->get_parent()->set_parent(&scope_);
    // Create getState function
    cpp_type *get_state_ret_type = new cpp_type(CPP_TYPE_WARPED_OBJECT_STATE);
    get_state_ret_type->set_reference();
@@ -406,6 +418,7 @@ void cppClass::add_simulation_functions()
    // Add all functions
    add_function(get_state_fun);
    add_function(add_input_fun);
+   add_function(add_output_fun);
 }
 
 void cppClass::implement_simulation_functions()
@@ -446,7 +459,9 @@ void cppClass::implement_simulation_functions()
    // Add statements to functions
    cpp_var *response_event = new cpp_var(RETURN_EVENT_LIST_VAR_NAME, event_handler->get_type());
    response_event->set_comment("Return value");
-   event_handler->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, response_event->get_ref(), response_event->get_type()));
+   cpp_unaryop_expr* response_event_decl = new cpp_unaryop_expr(CPP_UNARYOP_DECL, response_event->get_ref(), response_event->get_type());
+   event_handler->add_stmt(response_event_decl);
+   init_fun->add_stmt(response_event_decl);
    event_handler->get_scope()->add_decl(response_event);
    cpp_type *local_event_type = new cpp_type(CPP_TYPE_CUSTOM_EVENT);
    local_event_type->set_const();
@@ -462,7 +477,7 @@ void cppClass::implement_simulation_functions()
    // Retrieve all the vars and funs I need
    cpp_var* inputvar = get_var(INPUT_VAR_NAME);
    cpp_var* output_var = get_var(HIERARCHY_VAR_NAME);
-   // Change my internal state according to the event received
+   // Create the if to change the internal state according to the event received
    cpp_if * change_input_if = new cpp_if();
    cpp_binop_expr * cond_if = new cpp_binop_expr(CPP_BINOP_NEQ, local_event->get_type());
    cpp_fcall_stmt* find = new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "find");
@@ -472,6 +487,15 @@ void cppClass::implement_simulation_functions()
    cond_if->add_expr(new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "end"));
    change_input_if->set_condition(cond_if);
    event_handler->add_stmt(change_input_if);
+   // Implement all the statements inside the if
+   cpp_fcall_stmt* change_in_stmt = new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "at");
+   change_in_stmt->add_param(new_signal);
+   cpp_fcall_stmt* new_value_fcall = new cpp_fcall_stmt(new cpp_type(CPP_TYPE_BOOST_TRIBOOL), local_event->get_ref(), "newValue");
+   cpp_assign_stmt* update_signal = new cpp_assign_stmt(change_in_stmt, new_value_fcall);
+   change_input_if->add_to_body(update_signal);
+   // Implement all the statements inside the else
+   cpp_unaryop_expr* return_stmt = new cpp_unaryop_expr(CPP_UNARYOP_RETURN, response_event->get_ref(), response_event->get_type());
+   change_input_if->add_to_else_body(return_stmt);
    // Here there are the implementation specific instructions
    switch(type_)
    {
@@ -480,26 +504,35 @@ void cppClass::implement_simulation_functions()
          break;
    }
    // Add the cycle that will create the events
-   cpp_type* iterator_type = new cpp_type(*(output_var->get_type()));
+   cpp_type* output_pair = new cpp_type(CPP_TYPE_STD_PAIR, string_type);
+   output_pair->add_type(string_type);
+   cpp_type* iterator_type = new cpp_type(CPP_TYPE_STD_VECTOR, output_pair);
    iterator_type->set_iterator();
    cpp_var* iterator = new cpp_var ("it", iterator_type);
-   cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "begin"));
+   cpp_fcall_stmt* at_fun = new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "at");
+   at_fun->add_param(new_signal);
+   cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(at_fun->get_type(), at_fun, "begin"));
    cpp_for * push_event_for = new cpp_for();
    push_event_for->add_precycle(precycle);
    cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, iterator_type);
    cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
-   cond->add_expr(new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "end"));
+   cond->add_expr(new cpp_fcall_stmt(at_fun->get_type(), at_fun, "end"));
    push_event_for->set_condition(cond);
    push_event_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
-   cpp_fcall_stmt* add_event = new cpp_fcall_stmt(response_event->get_type(), new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, response_event->get_ref(), response_event->get_type()), "emplace_back");
-   add_event->add_param(new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()));
-   add_event->add_param(new_signal);
+   cpp_fcall_stmt* add_event = new cpp_fcall_stmt(response_event->get_type(), response_event->get_ref(), "emplace_back");
+   cpp_fcall_stmt* receiver_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()), "first");
+   receiver_name->set_member_access();
+   cpp_fcall_stmt* signal_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()), "second");
+   signal_name->set_member_access();
+   add_event->add_param(receiver_name);
+   add_event->add_param(signal_name);
    add_event->add_param(new cpp_fcall_stmt(new cpp_type(CPP_TYPE_UNSIGNED_INT), local_event->get_ref(), WARPED_TIMESTAMP_FUN_NAME));
-   add_event->add_param(new cpp_fcall_stmt(new cpp_type(CPP_TYPE_BOOST_TRIBOOL), local_event->get_ref(), "newValue"));
+   add_event->add_param(new_value_fcall);
    push_event_for->add_to_body(add_event);
    event_handler->add_stmt(push_event_for);
    // Add the return statement
-   event_handler->add_stmt(new cpp_unaryop_expr(CPP_UNARYOP_RETURN, response_event->get_ref(), response_event->get_type()));
+   event_handler->add_stmt(return_stmt);
+   init_fun->add_stmt(return_stmt);
 }
 
 cpp_var* cppClass::get_var(const std::string &name) const
@@ -526,12 +559,12 @@ void cpp_context::emit_after_classes(std::ostream &of, int level) const
    newline(of, level);
    of << "int main(int argc, const char** argv) {";
    newline(of, indent(level));
-   emit_children<cpp_stmt>(of, statements_, indent(level), ";");
+   emit_children<cpp_stmt>(of, statements_, level, ";");
    newline(of, level);
    of << "}; ";
 }
 
-void cpp_if::set_condition(cpp_expr* p) {
+void cpp_conditional::set_condition(cpp_expr* p) {
    assert(!condition_);
    condition_ = p;
 };
@@ -551,10 +584,20 @@ void cpp_if::emit(std::ostream &of, int level) const
    }
    newline(of, level);
    of << "}";
+   if(!else_statements_.empty())
+   {
+      of << " else {";
+      newline(of, indent(level));
+      emit_children<cpp_stmt>(of, else_statements_, indent(level), ";", false);
+      of << ";";
+      newline(of, level);
+      of << "}";
+   }
 }
 
 void cpp_for::emit(std::ostream &of, int level) const
 {
+   assert(condition_);
    newline(of, level);
    of << "for(";
    if(!precycle_.empty())
@@ -669,7 +712,7 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
        of << ">(";
       break;
    case CPP_UNARYOP_DEREF:
-       of << "*(";
+       of << "(*";
       break;
    case CPP_UNARYOP_LITERAL:
       break;
@@ -703,16 +746,19 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
 void cpp_fcall_stmt::emit(std::ostream &of, int level) const
 {
    base_->emit(of, level);
-   if(!fun_name_.empty())
+   if(!member_name_.empty())
    {
       if(is_pointer_call)
-         of << "->" << fun_name_;
+         of << "->" << member_name_;
       else
-         of << "." << fun_name_;
+         of << "." << member_name_;
    }
-   of << "(";
-   parameters_->emit(of, indent(level));
-   of << ")";
+   if(is_function_call)
+   {
+      of << "(";
+      parameters_->emit(of, indent(level));
+      of << ")";
+   }
 }
 
 cpp_var* cpp_function::get_var(const std::string &name) const
