@@ -162,7 +162,7 @@ void build_net()
    for(std::set<cpp_class_type>::iterator it = design_logic.begin();
          it != design_logic.end(); it++)
    {
-      only_remember_class(new cppClass("", *it));
+      only_remember_class(new cppClass(*it));
    }
    cpp_context * main = get_context();
    main->add_stmt(build_hierarchy(g_classes));

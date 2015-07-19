@@ -22,6 +22,7 @@
 #include "cpp_element.hh"
 #include "state.hh"
 #include "cpp_syntax.hh"
+#include "hierarchy.hh"
 
 #include <iostream>
 #include <sstream>
@@ -53,7 +54,7 @@ struct scope_nexus_t {
  */
 struct nexus_private_t {
    list<scope_nexus_t> signals;
-   cpp_expr *const_driver;
+   cpp_const_expr *const_driver;
 };
 
 /*
@@ -418,6 +419,71 @@ static void create_skeleton_class_for(ivl_scope_t scope)
 }
 
 /*
+ * Map two signals together.
+ */
+static void map_signal(ivl_signal_t to, cppClass* child,
+                                 cppClass* parent)
+{
+   ivl_nexus_t nexus = ivl_signal_nex(to, 0);
+   seen_nexus(nexus);
+
+   cpp_scope *parent_scope = parent->get_scope();
+
+   nexus_private_t *priv =
+      static_cast<nexus_private_t*>(ivl_nexus_get_private(nexus));
+   assert(priv);
+
+   const string name(ivl_signal_basename(to));
+
+   // We can only map ports to signals or constants
+   if (visible_nexus(priv, parent_scope)) {
+      cpp_var_ref* map_to = nexus_to_var_ref(parent->get_scope(), nexus);
+      submodule *temp = new submodule(child->get_name());
+      add_submodule_to(parent->get_name(), temp);
+      temp->insert_input(name, map_to->get_name());
+   }
+   else if (priv->const_driver && ivl_signal_port(to) == IVL_SIP_INPUT) {
+      cpp_const_expr* map_to = priv->const_driver;
+      submodule *temp = new submodule(child->get_name());
+      add_submodule_to(parent->get_name(), temp);
+      temp->insert_input(name, map_to->get_value());
+      priv->const_driver = NULL;
+   }
+   else {
+      // This nexus isn't attached to anything in the parent
+      return;
+   }
+
+}
+
+/*
+ * Find all the port mappings of a module instantiation.
+ */
+static void port_map(ivl_scope_t scope, cppClass* child,
+                     cppClass* parent)
+{
+   // Find all the port mappings
+   int nsigs = ivl_scope_sigs(scope);
+   for (int i = 0; i < nsigs; i++) {
+      ivl_signal_t sig = ivl_scope_sig(scope, i);
+
+      ivl_signal_port_t mode = ivl_signal_port(sig);
+      switch (mode) {
+      case IVL_SIP_NONE:
+         // Port map doesn't care about internal signals
+         break;
+      case IVL_SIP_INPUT:
+      case IVL_SIP_OUTPUT:
+         map_signal(sig, child, parent);
+         break;
+      case IVL_SIP_INOUT:
+      default:
+         assert(false);
+      }
+   }
+}
+
+/*
  * A first pass through the hierarchy: create C++ class for
  * each unique Verilog module type.
  */
@@ -508,8 +574,8 @@ extern "C" int draw_hierarchy(ivl_scope_t scope, void *_parent)
       cppClass *theclass = find_class(scope);
       assert(theclass);
 
-      cppClass *parent_ent = find_class(parent);
-      assert(parent_ent);
+      cppClass *parent_class = find_class(parent);
+      assert(parent_class);
       
       // And an instantiation statement
       string inst_name = ivl_scope_basename(scope);
@@ -517,17 +583,9 @@ extern "C" int draw_hierarchy(ivl_scope_t scope, void *_parent)
 
       // Make sure the name doesn't collide with anything we've
       // already declared
-      //avoid_name_collision(inst_name, parent_ent->get_scope());
+      //avoid_name_collision(inst_name, parent_class->get_scope());
 
-      cpp_var *inst =
-         new cpp_var(inst_name.c_str(), new cpp_type(CPP_TYPE_WARPED_SIMULATION_OBJECT));
-
-      ostringstream ss;
-      ss << "Generated from instantiation at "
-         << ivl_scope_file(scope) << ":" << ivl_scope_lineno(scope);
-      inst->set_comment(ss.str().c_str());
-
-      parent_ent->add_var(inst);
+      port_map(scope, theclass, parent_class);
    }
 
    return ivl_scope_children(scope, draw_hierarchy, scope);

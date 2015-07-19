@@ -29,12 +29,14 @@
 
 struct submodule {
    submodule(cpp_class_type thetype) : type(thetype) {};
+   submodule(const std::string& name) : type(CPP_CLASS_MODULE), name_(name) {};
 
    void insert_output(const std::string& el);
    void insert_input(const std::string& str1, const std::string& str2);
 
    // This is the class type to instantiate
-   cpp_class_type type;
+   const cpp_class_type type;
+   const std::string name_;
    // map<signal_name_in_supermodule, signal_name_in_submodule> >
    // The number of element of this map is the number of input of the logic port
    // For logic ports, the couple represent the same string

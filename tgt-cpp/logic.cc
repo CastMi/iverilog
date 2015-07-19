@@ -55,7 +55,7 @@ static void inputs_to_expr(cppClass *theclass, cpp_class_type type,
 static cppClass* input_to_expr(cppClass *theclass, cpp_unaryop_t,
                                 ivl_net_logic_t log)
 {
-   cppClass *theop = new cppClass(theclass->get_name(), CPP_CLASS_AND);
+   cppClass *theop = new cppClass(CPP_CLASS_AND);
    // The single output
    ivl_nexus_t pin = ivl_logic_pin(log, 0);
    assert(pin);

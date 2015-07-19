@@ -176,6 +176,7 @@ public:
       : cpp_expr(type), value_(exp) {}
    ~cpp_const_expr() {};
 
+   const std::string get_value() const { return value_; };
    void emit(std::ostream &of, int level) const;
 private:
    const std::string value_;
@@ -454,7 +455,7 @@ enum cpp_inherit_class {
 class cppClass : public cpp_element {
 public:
    cppClass(const string& name, const cpp_inherit_class type = CPP_INHERIT_BASE_CLASS);
-   cppClass(const string& name, const cpp_class_type lg);
+   cppClass(const cpp_class_type lg);
    virtual ~cppClass() {};
 
    void emit(std::ostream &of, int level = 0) const;
