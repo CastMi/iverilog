@@ -32,7 +32,7 @@ using namespace std;
 // Name of the Event class used
 #define CUSTOM_EVENT_CLASS_NAME "EventClass"
 // Name of the class that every SimulationObject will inherit
-#define BASE_CLASS_NAME "Port"
+#define BASE_CLASS_NAME "Module"
 // Name of the function to add a signal
 #define ADD_SIGNAL_FUN_NAME "addSignal"
 // Name of the function to add an output
@@ -168,6 +168,14 @@ private:
    std::list<cpp_expr*> children_;
 };
 
+class cpp_break : public cpp_stmt {
+public:
+   cpp_break() {}
+   ~cpp_break() {};
+
+   void emit(std::ostream &of, int level) const;
+};
+
 class cpp_const_expr : public cpp_expr {
 public:
    cpp_const_expr(const char *exp, const cpp_type *type)
@@ -293,7 +301,7 @@ public:
    cpp_conditional() : condition_(NULL) {};
    ~cpp_conditional() {};
 
-   void add_to_body(cpp_expr* item) { statements_.push_back(item); };
+   void add_to_body(cpp_stmt* item) { statements_.push_back(item); };
    void set_condition(cpp_expr* p);
 
 protected:

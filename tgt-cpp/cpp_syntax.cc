@@ -157,6 +157,11 @@ void cpp_const_expr::emit(std::ostream &of, int) const
    }
 }
 
+void cpp_break::emit(std::ostream &of, int) const
+{
+   of << "break";
+}
+
 void cpp_var_ref::emit(std::ostream &of, int level) const
 {
    if(!name_.empty())
@@ -504,6 +509,59 @@ void cppClass::implement_simulation_functions()
    // Here there are the implementation specific instructions
    switch(type_)
    {
+      case CPP_CLASS_AND:
+         {
+            // Create the cycle that will create the events
+            cpp_type* iterator_type = new cpp_type(*(inputvar->get_type()));
+            iterator_type->set_iterator();
+            cpp_var* iterator = new cpp_var ("it", iterator_type);
+            cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "begin"));
+            cpp_for * output_for = new cpp_for();
+            output_for->add_precycle(precycle);
+            cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, iterator_type);
+            cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
+            cond->add_expr(new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "end"));
+            output_for->set_condition(cond);
+            output_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
+            // Create the if to handle a false value on an input
+            cpp_if * false_if = new cpp_if();
+            cpp_binop_expr * cond_false = new cpp_binop_expr(CPP_BINOP_EQ, local_event->get_type());
+            cpp_unaryop_expr* it_deref = new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), inputvar->get_type());
+            cpp_fcall_stmt * thesignal = new cpp_fcall_stmt(string_type, it_deref, "second");
+            thesignal->set_member_access();
+            cond_false->add_expr_front(thesignal);
+            cpp_const_expr* false_expr = new cpp_const_expr("false", CPP_TYPE_NOTYPE);
+            cond_false->add_expr(false_expr);
+            cpp_fcall_stmt* begin_fun = new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "begin");
+            cpp_fcall_stmt* deref = new cpp_fcall_stmt(const_ref_string_type, begin_fun, "first");
+            deref->set_pointer_call();
+            deref->set_member_access();
+            cpp_fcall_stmt* get_el = new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "at");
+            get_el->add_param(deref);
+            cpp_assign_stmt* false_assign = new cpp_assign_stmt(get_el, false_expr);
+            false_if->set_condition(cond_false);
+            false_if->add_to_body(false_assign);
+            false_if->add_to_body(new cpp_break());
+            output_for->add_to_body(false_if);
+            // Create the if to handle an indeterminate value on an input
+            cpp_if * indeter_if = new cpp_if();
+            cpp_binop_expr * cond_indeter = new cpp_binop_expr(CPP_BINOP_EQ, local_event->get_type());
+            thesignal->set_member_access();
+            cond_indeter->add_expr_front(thesignal);
+            cpp_const_expr* indeter_expr = new cpp_const_expr("boost::indeterminate", CPP_TYPE_NOTYPE);
+            cond_indeter->add_expr(indeter_expr);
+            cpp_assign_stmt* indeter_assign = new cpp_assign_stmt(get_el, indeter_expr);
+            indeter_if->set_condition(cond_indeter);
+            indeter_if->add_to_body(indeter_assign);
+            output_for->add_to_body(indeter_if);
+            // Create/Add the default value before the for
+            cpp_assign_stmt* assign_default = new cpp_assign_stmt(get_el, new cpp_const_expr("true", CPP_TYPE_NOTYPE));
+            event_handler->add_stmt(assign_default);
+            init_fun->add_stmt(assign_default);
+            // Add the for the the functions
+            event_handler->add_stmt(output_for);
+            init_fun->add_stmt(output_for);
+         }
       case CPP_CLASS_MODULE:
       default:
          break;
@@ -584,7 +642,7 @@ void cpp_if::emit(std::ostream &of, int level) const
    if(!statements_.empty())
    {
       newline(of, indent(level));
-      emit_children<cpp_stmt>(of, statements_, indent(level), ";", false);
+      emit_children<cpp_stmt>(of, statements_, level, ";", false);
       of << ";";
    }
    newline(of, level);
