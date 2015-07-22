@@ -28,24 +28,35 @@
 #include <string>
 
 struct submodule {
-   submodule(cpp_class_type thetype) : type(thetype) {};
-   submodule(const std::string& name) : type(CPP_CLASS_MODULE), name_(name) {};
+   submodule(cpp_class_type thetype) : type(thetype), relate_class(NULL), hierarchy() {};
+   submodule(const cppClass* theclass) : type(CPP_CLASS_MODULE), relate_class(theclass) {};
 
-   void insert_output(const std::string& el);
+   void insert_output(const std::string& str1, const std::string& str2);
    void insert_input(const std::string& str1, const std::string& str2);
+   submodule* find(const cppClass* elem);
+   void add_submodule(submodule* item) { hierarchy.push_front(item); };
+   void merge(submodule* item);
 
    // This is the class type to instantiate
    const cpp_class_type type;
-   const std::string name_;
-   // map<signal_name_in_supermodule, signal_name_in_submodule> >
-   // The number of element of this map is the number of input of the logic port
-   // For logic ports, the couple represent the same string
+   const std::string name;
+   const cppClass* relate_class;
+   std::list<submodule*> hierarchy;
+   /*
+    * list<pair< signal_name_supermodule, signal_name_here> >
+    * For logic gates, the couple represents the same string.
+    */
    std::list< std::pair< std::string, std::string > > signal_mapping;
-   // The size of this list must be 1 for logic ports
-   std::list<std::string> output_name;
+   /*
+    * list<pair< signal_name_supermodule, signal_name_here> >
+    * For logic gates, the couple represents the same string
+    * The size of this list must be 1 for logic gates.
+    */
+   std::list< std::pair< std::string, std::string > > outputs_map;
 };
 
-void add_submodule_to(const std::string& name, submodule* item);
-std::list<cpp_stmt*> build_hierarchy(std::list<cppClass*> class_list);
+void remember_hierarchy(cppClass* theclass);
+submodule* add_submodule_to(submodule* item, cppClass* parent);
+std::list<cpp_stmt*> build_hierarchy();
 
 #endif  // #ifndef INC_CPP_HIERARCHY_HH

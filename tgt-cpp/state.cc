@@ -76,11 +76,6 @@ void remember_logic(cpp_class_type type)
    design_logic.insert(type);
 }
 
-cpp_context* get_context()
-{
-   return context;
-}
-
 // True if signal `sig' has already been encountered by the code
 // generator. This means we have already assigned it to a C++
 // object and possibly renamed it.
@@ -125,7 +120,7 @@ const std::string &get_renamed_signal(ivl_signal_t sig)
    return g_known_signals[sig].renamed;
 }
 
-static void only_remember_class(cppClass* theclass)
+static void only_remember_class(cppClass* theclass, bool a = true)
 {
    /*
     * The first 2 classes added are the event class and
@@ -139,6 +134,8 @@ static void only_remember_class(cppClass* theclass)
    std::list<cppClass*>::iterator it = g_classes.begin();
    std::advance(it,2);
    g_classes.insert(it, theclass);
+   if(a)
+      remember_hierarchy(theclass);
 }
 
 /*
@@ -149,11 +146,11 @@ void build_basic_classes()
    // Create the base class
    cppClass *thebaseclass = new cppClass(BASE_CLASS_NAME, CPP_INHERIT_SIM_OBJ);
    thebaseclass->set_comment("Created to implements basic functions");
-   only_remember_class(thebaseclass);
+   only_remember_class(thebaseclass, false);
    // Create the event class
    cppClass *theeventclass = new cppClass(CUSTOM_EVENT_CLASS_NAME, CPP_INHERIT_EVENT);
    theeventclass->set_comment("Created to store information about the triggered event");
-   only_remember_class(theeventclass);
+   only_remember_class(theeventclass, false);
 }
 
 void build_net()
@@ -162,10 +159,9 @@ void build_net()
    for(std::set<cpp_class_type>::iterator it = design_logic.begin();
          it != design_logic.end(); it++)
    {
-      only_remember_class(new cppClass(*it));
+      only_remember_class(new cppClass(*it), false);
    }
-   cpp_context * main = get_context();
-   main->add_stmt(build_hierarchy(g_classes));
+   context->add_stmt(build_hierarchy());
 }
 
 // TODO: Can we dispose of this???
@@ -246,6 +242,7 @@ void remember_class(cppClass* theclass, ivl_scope_t scope)
 {
    g_classes.push_back(theclass);
    g_scope_names[scope] = theclass->get_name();
+   remember_hierarchy(theclass);
 }
 
 // Print all C++ classes, in order, to the specified output stream.

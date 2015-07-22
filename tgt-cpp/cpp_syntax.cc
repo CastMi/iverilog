@@ -335,7 +335,7 @@ void cppClass::add_event_functions()
    init_timestamp->add_param(new_timestamp->get_ref());
    constr->add_init(init_timestamp);
    // Add new_signal_value var
-   cpp_var *new_signal_value = new cpp_var("new_signal_value", timestamp_type);
+   cpp_var *new_signal_value = new cpp_var("new_signal_value", tribool_type);
    constr->add_param(new_signal_value);
    cpp_fcall_stmt* init_signal_value = new cpp_fcall_stmt(const_ref_string_type, signal_value->get_ref(), "");
    init_signal_value->add_param(new_signal_value->get_ref());
@@ -587,10 +587,15 @@ void cppClass::implement_simulation_functions()
    receiver_name->set_member_access();
    cpp_fcall_stmt* signal_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()), "second");
    signal_name->set_member_access();
-   add_event->add_param(receiver_name);
-   add_event->add_param(signal_name);
-   add_event->add_param(new cpp_fcall_stmt(new cpp_type(CPP_TYPE_UNSIGNED_INT), local_event->get_ref(), WARPED_TIMESTAMP_FUN_NAME));
-   add_event->add_param(new_value_fcall);
+   cpp_type* no_type = new cpp_type(CPP_TYPE_NOTYPE);
+   cpp_const_expr* event_name = new cpp_const_expr(cpp_type::tostring(CPP_TYPE_CUSTOM_EVENT).c_str(), no_type);
+   cpp_fcall_stmt* new_event_fcall = new cpp_fcall_stmt(no_type, event_name, "");
+   cpp_unaryop_expr* new_event = new cpp_unaryop_expr(CPP_UNARYOP_NEW, new_event_fcall, local_event_type);
+   new_event_fcall->add_param(receiver_name);
+   new_event_fcall->add_param(new cpp_fcall_stmt(new cpp_type(CPP_TYPE_UNSIGNED_INT), local_event->get_ref(), WARPED_TIMESTAMP_FUN_NAME));
+   new_event_fcall->add_param(new_value_fcall);
+   new_event_fcall->add_param(signal_name);
+   add_event->add_param(new_event);
    push_event_for->add_to_body(add_event);
    event_handler->add_stmt(push_event_for);
    // Add the return statement

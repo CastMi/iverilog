@@ -421,8 +421,8 @@ static void create_skeleton_class_for(ivl_scope_t scope)
 /*
  * Map two signals together.
  */
-static void map_signal(ivl_signal_t to, cppClass* child,
-                                 cppClass* parent)
+static void map_signal(ivl_signal_t to, submodule* to_insert,
+                     cppClass* parent, bool input = true)
 {
    ivl_nexus_t nexus = ivl_signal_nex(to, 0);
    seen_nexus(nexus);
@@ -437,29 +437,30 @@ static void map_signal(ivl_signal_t to, cppClass* child,
 
    // We can only map ports to signals or constants
    if (visible_nexus(priv, parent_scope)) {
-      cpp_var_ref* map_to = nexus_to_var_ref(parent->get_scope(), nexus);
-      submodule *temp = new submodule(child->get_name());
-      add_submodule_to(parent->get_name(), temp);
-      temp->insert_input(name, map_to->get_name());
+      cpp_var_ref* map_to = nexus_to_var_ref(parent_scope, nexus);
+      if(input)
+         to_insert->insert_input(name, map_to->get_name());
+      else
+         to_insert->insert_output(map_to->get_name(), name);
    }
    else if (priv->const_driver && ivl_signal_port(to) == IVL_SIP_INPUT) {
       cpp_const_expr* map_to = priv->const_driver;
-      submodule *temp = new submodule(child->get_name());
-      add_submodule_to(parent->get_name(), temp);
-      temp->insert_input(name, map_to->get_value());
+      if(input)
+         to_insert->insert_input(name, map_to->get_value());
+      else
+         to_insert->insert_output(map_to->get_value(), name);
       priv->const_driver = NULL;
    }
    else {
       // This nexus isn't attached to anything in the parent
       return;
    }
-
 }
 
 /*
  * Find all the port mappings of a module instantiation.
  */
-static void port_map(ivl_scope_t scope, cppClass* child,
+static void port_map(ivl_scope_t scope, submodule* child,
                      cppClass* parent)
 {
    // Find all the port mappings
@@ -473,8 +474,10 @@ static void port_map(ivl_scope_t scope, cppClass* child,
          // Port map doesn't care about internal signals
          break;
       case IVL_SIP_INPUT:
-      case IVL_SIP_OUTPUT:
          map_signal(sig, child, parent);
+         break;
+      case IVL_SIP_OUTPUT:
+         map_signal(sig, child, parent, false);
          break;
       case IVL_SIP_INOUT:
       default:
@@ -585,7 +588,9 @@ extern "C" int draw_hierarchy(ivl_scope_t scope, void *_parent)
       // already declared
       //avoid_name_collision(inst_name, parent_class->get_scope());
 
-      port_map(scope, theclass, parent_class);
+      submodule *temp = new submodule(theclass);
+      add_submodule_to(temp, parent_class);
+      port_map(scope, temp, parent_class);
    }
 
    return ivl_scope_children(scope, draw_hierarchy, scope);

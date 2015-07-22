@@ -1,9 +1,10 @@
-module mysubmod (w, q);
+module mysubmod (w, d, q);
 
 input w;
+input d;
 output q;
 
-assign q = w || 0;
+assign q = w || d;
 
 endmodule
 
@@ -26,8 +27,8 @@ wire out_1;
 wire g;
 wire h;
 
-mysubmod instance_1(a, g);
-mysubmod instance_2(a, h);
+mysubmod instance_1(a, b, g);
+mysubmod instance_2(a, c, h);
 
 and u0 (out_0, a, b);
 
