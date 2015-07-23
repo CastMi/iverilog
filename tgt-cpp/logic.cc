@@ -52,22 +52,6 @@ static void inputs_to_expr(cppClass *theclass, cpp_class_type type,
    add_submodule_to(temp, theclass);
 }
 
-static cppClass* input_to_expr(cppClass *theclass, cpp_unaryop_t,
-                                ivl_net_logic_t log)
-{
-   cppClass *theop = new cppClass(CPP_CLASS_AND);
-   // The single output
-   ivl_nexus_t pin = ivl_logic_pin(log, 0);
-   assert(pin);
-   cpp_var_ref* tmp = readable_ref(theclass->get_scope(), pin);
-   theop->add_var(new cpp_var(tmp->get_name(), tmp->get_type()));
-   // The single input
-   pin = ivl_logic_pin(log, 1);
-   tmp = readable_ref(theclass->get_scope(), pin);
-   theop->add_to_inputs(new cpp_var(tmp->get_name(), tmp->get_type()));
-   return theop;
-}
-
 void translate_logic(cppClass *theclass, ivl_net_logic_t log)
 {
    switch (ivl_logic_type(log)) {
@@ -77,10 +61,10 @@ void translate_logic(cppClass *theclass, ivl_net_logic_t log)
    case IVL_LO_NOR:
    case IVL_LO_XOR:
    case IVL_LO_XNOR:
-      // FIXME: right now they are translated as AND
+   case IVL_LO_NOT:
+      // FIXME: right now they are all translated as AND
       inputs_to_expr(theclass, CPP_CLASS_AND, log);
       return;
-   case IVL_LO_NOT:
    case IVL_LO_PULLUP:
    case IVL_LO_PULLDOWN:
    case IVL_LO_BUF:

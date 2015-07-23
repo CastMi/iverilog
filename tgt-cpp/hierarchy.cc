@@ -293,9 +293,9 @@ std::list<cpp_stmt*> build_hierarchy()
    cpp_var_ref* lhs = new cpp_var_ref("this_sim", new cpp_type(CPP_TYPE_WARPED_SIMULATION));
    cpp_unaryop_expr* sim_decl = new cpp_unaryop_expr(CPP_UNARYOP_DECL, lhs, lhs->get_type());
    cpp_expr_list* rhs = new cpp_expr_list();
-   rhs->add_cpp_expr(new cpp_const_expr("Logic simulation", string_type));
-   rhs->add_cpp_expr(new cpp_var_ref("argc", no_type));
-   rhs->add_cpp_expr(new cpp_var_ref("argv", no_type));
+   rhs->add_expr(new cpp_const_expr("Logic simulation", string_type));
+   rhs->add_expr(new cpp_var_ref("argc", no_type));
+   rhs->add_expr(new cpp_var_ref("argv", no_type));
    cpp_assign_stmt* sim_init = new cpp_assign_stmt(sim_decl, rhs, true);
    return_value.push_back(sim_init);
    // Create the object vector

@@ -111,6 +111,7 @@ extern "C" int target_design(ivl_design_t des)
               << "// Icarus Verilog C++ Code Generator " VERSION
                  " (" VERSION_TAG ")" << endl << endl
               << "#include <warped.hpp>" << endl
+              << "#include <cassert>" << endl
               << "#include <vector>" << endl
               << "#include <map>" << endl
               << "#include <boost/logic/tribool.hpp>" << endl

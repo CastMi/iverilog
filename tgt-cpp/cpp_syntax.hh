@@ -68,21 +68,6 @@ protected:
    const cpp_type *type_;
 };
 
-enum cpp_binop_t {
-   CPP_BINOP_AND,
-   CPP_BINOP_NEQ,
-   CPP_BINOP_EQ,
-   CPP_BINOP_OR,
-   CPP_BINOP_ADD,
-   CPP_BINOP_SUB,
-   CPP_BINOP_MULT,
-   CPP_BINOP_XOR,
-   CPP_BINOP_NAND,
-   CPP_BINOP_NOR,
-   CPP_BINOP_XNOR,
-   CPP_BINOP_DIV,
-};
-
 /*
  * A scalar variable reference.
  * It will emit the var name if not empty.
@@ -102,6 +87,22 @@ public:
 
 private:
    std::string name_;
+};
+
+enum cpp_binop_t {
+   CPP_BINOP_AND,
+   CPP_BINOP_NEQ,
+   CPP_BINOP_EQ,
+   CPP_BINOP_OR,
+   CPP_BINOP_ADD,
+   CPP_BINOP_SUB,
+   CPP_BINOP_MULT,
+   CPP_BINOP_XOR,
+   CPP_BINOP_NAND,
+   CPP_BINOP_NOR,
+   CPP_BINOP_XNOR,
+   CPP_BINOP_DIV,
+   CPP_BINOP_SQUARE_BRACKETS,
 };
 
 /*
@@ -156,26 +157,6 @@ private:
    cpp_expr *operand_;
 };
 
-class cpp_expr_list : public cpp_expr {
-public:
-   cpp_expr_list() : cpp_expr(new cpp_type(CPP_TYPE_NOTYPE)) {}
-   ~cpp_expr_list() {};
-
-   void add_cpp_expr(cpp_expr* el) { children_.push_back(el); };
-   void emit(std::ostream &of, int level) const;
-
-private:
-   std::list<cpp_expr*> children_;
-};
-
-class cpp_break : public cpp_stmt {
-public:
-   cpp_break() {}
-   ~cpp_break() {};
-
-   void emit(std::ostream &of, int level) const;
-};
-
 class cpp_const_expr : public cpp_expr {
 public:
    cpp_const_expr(const char *exp, const cpp_type *type)
@@ -188,6 +169,42 @@ public:
    void emit(std::ostream &of, int level) const;
 private:
    const std::string value_;
+};
+
+class cpp_expr_list : public cpp_expr {
+public:
+   cpp_expr_list() : cpp_expr(new cpp_type(CPP_TYPE_NOTYPE)) {}
+   ~cpp_expr_list() {};
+
+   void add_expr(cpp_expr* el) { children_.push_back(el); };
+   void emit(std::ostream &of, int level) const;
+
+private:
+   std::list<cpp_expr*> children_;
+};
+
+/*
+ * By default, if this object is constructed without parameters
+ * It prints out an "assert(false)".
+ * Otherwise It uses the expression as a paraemter for the assert function.
+ */
+class cpp_assert : public cpp_stmt {
+public:
+   cpp_assert() : expr_(NULL) {}
+   cpp_assert(cpp_expr* expr) : expr_(expr) {}
+   ~cpp_assert() {};
+
+    void emit(std::ostream &of, int level) const;
+private:
+    cpp_expr* expr_;
+};
+
+class cpp_break : public cpp_stmt {
+public:
+   cpp_break() {}
+   ~cpp_break() {};
+
+   void emit(std::ostream &of, int level) const;
 };
 
 /*
@@ -226,16 +243,17 @@ protected:
  */
 class cpp_var : public cpp_decl {
 public:
-   cpp_var(const string& name, const cpp_type* type)
-      : cpp_decl(name, type), ref_to_this_var(NULL) {}
-   cpp_var(const string& name, const cpp_type_name_t type)
-      : cpp_decl(name, type), ref_to_this_var(NULL) {}
+   cpp_var(const string& name, const cpp_type* type, cpp_expr* def_val = NULL)
+      : cpp_decl(name, type), ref_to_this_var(NULL), default_value(def_val) {}
+   cpp_var(const string& name, const cpp_type_name_t type, cpp_expr* def_val = NULL)
+      : cpp_decl(name, type), ref_to_this_var(NULL), default_value(def_val) {}
 
    virtual void emit(std::ostream &of, int level) const;
    cpp_var_ref* get_ref();
 
 private:
    cpp_var_ref* ref_to_this_var;
+   cpp_expr* default_value;
 };
 
 /*
@@ -281,7 +299,7 @@ public:
    virtual ~cpp_fcall_stmt() {};
 
    virtual void emit(std::ostream &of, int level = 0) const;
-   virtual void add_param(cpp_expr* el) { parameters_->add_cpp_expr(el); };
+   virtual void add_param(cpp_expr* el) { parameters_->add_expr(el); };
    void set_pointer_call() { is_pointer_call = true; };
    void set_member_access() { is_function_call = false; };
 
@@ -319,7 +337,7 @@ public:
    ~cpp_if() {};
 
    virtual void emit(std::ostream &of, int level = 0) const;
-   void add_to_else_body(cpp_expr* item) { else_statements_.push_back(item); };
+   void add_to_else_body(cpp_stmt* item) { else_statements_.push_back(item); };
 
 protected:
    std::list<cpp_stmt*> else_statements_;
@@ -358,10 +376,6 @@ protected:
    bool is_instantiation;
 };
 
-/*
- * Roughly these map onto Verilog's processes, functions
- * and tasks.
- */
 class cpp_procedural : public cpp_decl {
 public:
    cpp_procedural(const char *name, cpp_type *ret_type)

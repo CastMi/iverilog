@@ -110,7 +110,7 @@ void cpp_binop_expr::emit(std::ostream &of, int level) const
    std::list<cpp_expr*>::const_iterator it = operands_.begin();
 
    (*it)->emit(of, level);
-   while(++it != operands_.end())
+   for(it++; it != operands_.end(); it++)
    {
       switch(op_)
       {
@@ -132,10 +132,15 @@ void cpp_binop_expr::emit(std::ostream &of, int level) const
          case CPP_BINOP_SUB:
             of << " - ";
             break;
+         case CPP_BINOP_SQUARE_BRACKETS:
+            of << "[";
+            break;
          default:
             error("This binary operation is not supported");
       }
       (*it)->emit(of, level);
+      if(op_ == CPP_BINOP_SQUARE_BRACKETS)
+            of << "]";
    }
    close_parens(of);
 }
@@ -353,7 +358,8 @@ void cppClass::add_simulation_functions()
    // Start creating vars
    // Signal var
    cpp_type* string_type = new cpp_type(CPP_TYPE_STD_STRING);
-   cpp_type* inside_input_map = new cpp_type(CPP_TYPE_NOTYPE, new cpp_type(CPP_TYPE_BOOST_TRIBOOL));
+   cpp_type* boost_type = new cpp_type(CPP_TYPE_BOOST_TRIBOOL);
+   cpp_type* inside_input_map = new cpp_type(CPP_TYPE_NOTYPE, boost_type);
    inside_input_map->add_type(string_type);
    cpp_var *inputvar = new cpp_var(INPUT_VAR_NAME, new cpp_type(CPP_TYPE_STD_MAP, inside_input_map));
    inputvar->set_comment("map< signal_name, value >");
@@ -376,12 +382,15 @@ void cppClass::add_simulation_functions()
    cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
    const_ref_string_type->set_const();
    const_ref_string_type->set_reference();
-   cpp_var *input_name_var = new cpp_var("signal", const_ref_string_type);
-   add_input_fun->add_param(input_name_var);
-   cpp_fcall_stmt* emplace_fcall = new cpp_fcall_stmt(void_type, inputvar->get_ref(), "emplace");
    cpp_type* no_type = new cpp_type(CPP_TYPE_NOTYPE);
+   cpp_const_expr* indeterminate_value = new cpp_const_expr("boost::indeterminate", no_type);
+   cpp_var *input_name_var = new cpp_var("signal", const_ref_string_type);
+   cpp_var *signal_value_var = new cpp_var("value", boost_type, indeterminate_value);
+   add_input_fun->add_param(input_name_var);
+   add_input_fun->add_param(signal_value_var);
+   cpp_fcall_stmt* emplace_fcall = new cpp_fcall_stmt(void_type, inputvar->get_ref(), "emplace");
    emplace_fcall->add_param(new cpp_const_expr(input_name_var->get_name().c_str(), no_type));
-   emplace_fcall->add_param(new cpp_const_expr("boost::indeterminate", no_type));
+   emplace_fcall->add_param(signal_value_var->get_ref());
    add_input_fun->add_stmt(emplace_fcall);
    add_input_fun->get_scope()->get_parent()->set_parent(&scope_);
    // Create the function to add an output
@@ -393,11 +402,12 @@ void cppClass::add_simulation_functions()
    add_output_fun->add_param(signal2);
    add_output_fun->add_param(signal3);
    // Create the instruction to store the informations
-   cpp_fcall_stmt* at_fcall = new cpp_fcall_stmt(output_var->get_type(), output_var->get_ref(), "at");
-   at_fcall->add_param(signal1->get_ref());
-   cpp_fcall_stmt* push_back_fcall = new cpp_fcall_stmt(at_fcall->get_type(), at_fcall, "emplace_back");
-   push_back_fcall->add_param(signal2->get_ref());
-   push_back_fcall->add_param(signal3->get_ref());
+   cpp_binop_expr* at_fcall = new cpp_binop_expr(output_var->get_ref(), CPP_BINOP_SQUARE_BRACKETS, signal1->get_ref(), output_vec_pair);
+   cpp_fcall_stmt* make_pair = new cpp_fcall_stmt(no_type, new cpp_const_expr("std::make_pair", no_type), "");
+   make_pair->add_param(signal2->get_ref());
+   make_pair->add_param(signal3->get_ref());
+   cpp_fcall_stmt* push_back_fcall = new cpp_fcall_stmt(no_type, at_fcall, "push_back");
+   push_back_fcall->add_param(make_pair);
    add_output_fun->add_stmt(push_back_fcall);
    add_output_fun->get_scope()->get_parent()->set_parent(&scope_);
    // Create the getState function
@@ -504,8 +514,7 @@ void cppClass::implement_simulation_functions()
    cpp_assign_stmt* update_signal = new cpp_assign_stmt(change_in_stmt, new_value_fcall);
    change_input_if->add_to_body(update_signal);
    // Implement all the statements inside the else
-   cpp_unaryop_expr* return_stmt = new cpp_unaryop_expr(CPP_UNARYOP_RETURN, response_event->get_ref(), response_event->get_type());
-   change_input_if->add_to_else_body(return_stmt);
+   change_input_if->add_to_else_body(new cpp_assert());
    // Here there are the implementation specific instructions
    switch(type_)
    {
@@ -598,7 +607,9 @@ void cppClass::implement_simulation_functions()
    add_event->add_param(new_event);
    push_event_for->add_to_body(add_event);
    event_handler->add_stmt(push_event_for);
+   init_fun->add_stmt(push_event_for);
    // Add the return statement
+   cpp_unaryop_expr* return_stmt = new cpp_unaryop_expr(CPP_UNARYOP_RETURN, response_event->get_ref(), response_event->get_type());
    event_handler->add_stmt(return_stmt);
    init_fun->add_stmt(return_stmt);
 }
@@ -771,27 +782,29 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
 
    switch (op_) {
    case CPP_UNARYOP_NOT:
-       of << "not ";
+      of << "not ";
       break;
    case CPP_UNARYOP_NEW:
-       of << "new ";
+      of << "new ";
       break;
    case CPP_UNARYOP_STATIC_CAST:
-       of << "static_cast<";
-       type_->emit(of);
-       of << ">(";
+      of << "static_cast<";
+      type_->emit(of);
+      of << ">";
+      open_parens(of);
       break;
    case CPP_UNARYOP_DEREF:
-       of << "(*";
+      open_parens(of);
+      of << "*";
       break;
    case CPP_UNARYOP_LITERAL:
       break;
    case CPP_UNARYOP_DECL:
       operand_->get_type()->emit(of, level);
-       of << " ";
+      of << " ";
       break;
    case CPP_UNARYOP_NEG:
-       of << "- ";
+      of << "- ";
       break;
    case CPP_UNARYOP_ADD:
       break;
@@ -803,13 +816,19 @@ void cpp_unaryop_expr::emit(std::ostream &of, int level) const
    }
    operand_->emit(of, level);
 
-   // Cast needs to close the parenthesis
-   if(op_ == CPP_UNARYOP_STATIC_CAST ||
-         op_ == CPP_UNARYOP_DEREF)
-       of << ")";
-   
-   if(op_ == CPP_UNARYOP_ADD)
-       of << "++";
+   // Some unaryop need to close the parenthesis
+   switch(op_)
+   {
+      case CPP_UNARYOP_STATIC_CAST:
+      case CPP_UNARYOP_DEREF:
+         close_parens(of);
+         break;
+      case CPP_UNARYOP_ADD:
+         of << "++";
+         break;
+      default:
+         break;
+   }
    close_parens(of);
 }
 
@@ -874,10 +893,25 @@ cpp_var_ref* cpp_var::get_ref()
    return ref_to_this_var;
 }
 
+void cpp_assert::emit(std::ostream &of, int level) const
+{
+   of << "assert(";
+   if(expr_ != NULL)
+      expr_->emit(of, level);
+   else
+      of << "false";
+   of << ")";
+}
+
 void cpp_var::emit(std::ostream &of, int level) const
 {
    newline(of, level);
    emit_comment(of, level);
    type_->emit(of, level);
    of << " " << name_;
+   if(default_value != NULL)
+   {
+      of << " = ";
+      default_value->emit(of, level);
+   }
 }
