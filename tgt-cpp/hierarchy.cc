@@ -230,7 +230,7 @@ static std::string recursive_build(submodule* current, std::string father_name,
          assert((*input_it).second == (*input_it).first);
          cpp_const_expr* supermod_signal = new cpp_const_expr((*input_it).second.c_str(), string_type);
          cpp_const_expr* submod_signal = new cpp_const_expr((*input_it).first.c_str(), string_type);
-         // Add signal to gates. Modules don't need.
+         // Add signal to gates.
          cpp_fcall_stmt* add_in_to_port = new cpp_fcall_stmt(no_type, sub_var_ref, ADD_SIGNAL_FUN_NAME);
          add_in_to_port->set_pointer_call();
          add_in_to_port->add_param(supermod_signal);
@@ -247,10 +247,17 @@ static std::string recursive_build(submodule* current, std::string father_name,
             output_it != (*it)->outputs_map.end(); output_it++ )
       {
          assert((*output_it).second == (*output_it).first);
+         cpp_const_expr* supermod_signal = new cpp_const_expr((*output_it).second.c_str(), string_type);
+         cpp_const_expr* submod_signal = new cpp_const_expr((*output_it).first.c_str(), string_type);
+         // Add signal to gates.
+         cpp_fcall_stmt* add_in_to_port = new cpp_fcall_stmt(no_type, sub_var_ref, ADD_SIGNAL_FUN_NAME);
+         add_in_to_port->set_pointer_call();
+         add_in_to_port->add_param(supermod_signal);
+         list->push_back(add_in_to_port);
          // Add all the outputs
          cpp_fcall_stmt* add_out_to_port = new cpp_fcall_stmt(no_type, sub_var_ref, ADD_OUTPUT_FUN_NAME);
          add_out_to_port->set_pointer_call();
-         add_out_to_port->add_param(new cpp_const_expr((*output_it).first.c_str(), string_type));
+         add_out_to_port->add_param(submod_signal);
          // The name of the current module
          cpp_const_expr* my_string_name = new cpp_const_expr(my_name.c_str(), string_type);
          add_out_to_port->add_param(my_string_name);
