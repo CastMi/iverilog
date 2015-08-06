@@ -39,7 +39,6 @@ struct submodule {
 
    // This is the class type to instantiate
    const cpp_class_type type;
-   const std::string name;
    const cppClass* relate_class;
    std::list<submodule*> hierarchy;
    /*

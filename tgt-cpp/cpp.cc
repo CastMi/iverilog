@@ -109,13 +109,7 @@ extern "C" int target_design(ivl_design_t des)
       ofstream outfile(ofname);
       outfile << "// This C++11 compliant code was converted using the" << endl
               << "// Icarus Verilog C++ Code Generator " VERSION
-                 " (" VERSION_TAG ")" << endl << endl
-              << "#include <warped.hpp>" << endl
-              << "#include <cassert>" << endl
-              << "#include <vector>" << endl
-              << "#include <map>" << endl
-              << "#include <boost/logic/tribool.hpp>" << endl
-              << "#include <boost/logic/tribool_io.hpp>" << endl;
+                 " (" VERSION_TAG ")" << endl;
 
       emit_everything(outfile);
    }

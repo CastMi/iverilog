@@ -1,3 +1,22 @@
+module top;
+
+reg l, m, n, o;
+wire p;
+
+mymod mymod(l, m, n, o, p);
+
+initial
+begin
+
+l = 1;
+m = 1;
+n = 1;
+o = 1;
+
+end
+
+endmodule
+
 module mysubmod (w, d, q);
 
 input w;

@@ -151,6 +151,12 @@ void build_basic_classes()
    cppClass *theeventclass = new cppClass(CUSTOM_EVENT_CLASS_NAME, CPP_INHERIT_EVENT);
    theeventclass->set_comment("Created to store information about the triggered event");
    only_remember_class(theeventclass, false);
+   context->add_include("boost/logic/tribool.hpp");
+   context->add_include("boost/logic/tribool_io.hpp");
+   context->add_include("cassert");
+   context->add_include("map");
+   context->add_include("vector");
+   context->add_include("warped.hpp");
 }
 
 void build_net()

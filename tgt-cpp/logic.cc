@@ -37,6 +37,7 @@ static void inputs_to_expr(cppClass *theclass, cpp_class_type type,
    ivl_nexus_t output = ivl_logic_pin(log, 0);
    assert(output);
    cpp_var_ref* tmp = readable_ref(theclass->get_scope(), output);
+   assert(tmp);
    temp->insert_output(tmp->get_name(), tmp->get_name());
    
    // All the inputs
@@ -46,6 +47,7 @@ static void inputs_to_expr(cppClass *theclass, cpp_class_type type,
       assert(pin);
 
       tmp = readable_ref(theclass->get_scope(), pin);
+      assert(tmp);
       temp->insert_input(tmp->get_name(), tmp->get_name());
    }
 

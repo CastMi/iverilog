@@ -766,6 +766,13 @@ void cpp_for::emit(std::ostream &of, int level) const
 void cpp_context::emit_before_classes(std::ostream &of, int level) const
 {
    newline(of, level);
+   for(std::set<std::string>::iterator it = includes_.begin();
+         it != includes_.end(); it++)
+   {
+      of << "#include <" + *it + ">";
+      newline(of, level);
+   }
+   newline(of, level);
    of << "WARPED_DEFINE_OBJECT_STATE_STRUCT(" << cpp_type::tostring(CPP_TYPE_ELEMENT_STATE) << "){";
    if(!elem_parts_.empty())
       emit_children<cpp_var>(of, elem_parts_, indent(level), ";");

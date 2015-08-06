@@ -48,22 +48,24 @@ submodule* submodule::find(const cppClass* tofind)
    {
       if((*it)->type == CPP_CLASS_MODULE)
       {
-         tmp = find(tofind);
+         tmp = (*it)->find(tofind);
          if(tmp != NULL)
             return tmp;
          assert(tmp == NULL);
       }
    }
-   assert(false);
+   assert(tmp == NULL);
+   return tmp;
 }
 
 submodule* add_submodule_to(submodule* item, cppClass* parent)
 {
    if(item->type == CPP_CLASS_MODULE)
    {
+      assert(item->relate_class != NULL);
       bool flag = true;
       for(std::list<submodule*>::iterator it = modules.begin();
-            it != modules.end() ; it++)
+            it != modules.end() && flag; it++)
       {
          if((*it)->relate_class->get_name() == item->relate_class->get_name())
          {
@@ -110,13 +112,13 @@ void submodule::merge(submodule* el)
 
 void submodule::insert_output(const std::string& str1, const std::string& str2)
 {
-   assert(!str1.empty() ||  !str2.empty());
+   assert(!str1.empty() || !str2.empty());
    outputs_map.push_front(std::pair<std::string, std::string>(str1, str2));
 }
 
 void submodule::insert_input(const std::string& str1, const std::string& str2)
 {
-   assert(!str1.empty() ||  !str2.empty());
+   assert(!str1.empty() || !str2.empty());
    signal_mapping.push_front(std::pair<std::string, std::string>(str1, str2));
 }
 
@@ -315,10 +317,7 @@ std::list<cpp_stmt*> build_hierarchy()
    // Analyze all the top modules
    for(std::list<submodule*>::iterator class_it = modules.begin();
          class_it != modules.end(); class_it++ )
-   {
-      assert((*class_it)->relate_class != NULL);
       recursive_build(*class_it, "", &return_value);
-   }
    // Add the final instruction to start the simulation
    cpp_fcall_stmt* start_sim = new cpp_fcall_stmt(no_type, lhs, "simulate");
    start_sim->set_comment("Start simulation");

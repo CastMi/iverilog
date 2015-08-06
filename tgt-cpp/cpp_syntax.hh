@@ -406,12 +406,14 @@ public:
    void add_stmt(cpp_stmt* el) { statements_.push_back(el); };
    void add_stmt(std::list<cpp_stmt*> el) { statements_.splice(statements_.end(), el); };
    void add_var_to_state(cpp_var* el) { elem_parts_.push_back(el); };
+   void add_include(std::string el ) { includes_.insert(el); };
 
 private:
    // the macro that define the state
    std::list<cpp_var*> elem_parts_;
    // statements inside the main
    std::list<cpp_stmt*> statements_;
+   std::set<std::string> includes_;
 };
 
 class cpp_function : public cpp_procedural {
@@ -496,9 +498,9 @@ public:
    cpp_var* get_var(const std::string &name) const;
 
 private:
-   void add_simulation_functions();
-   void implement_simulation_functions();
-   void add_event_functions();
+   inline void add_simulation_functions();
+   inline void implement_simulation_functions();
+   inline void add_event_functions();
 
    // Class name
    std::string name_;

@@ -29,33 +29,33 @@ std::string cpp_type::tostring(const cpp_type_name_t type)
 {
    switch(type)
    {
-      case CPP_TYPE_WARPED_EVENT:
-         return std::string("warped::Event");
-       case CPP_TYPE_WARPED_OBJECT_STATE:
-         return std::string("warped::ObjectState");
-       case CPP_TYPE_VOID:
-         return std::string("void");
-       case CPP_TYPE_WARPED_SIMULATION_OBJECT:
-         return std::string("warped::SimulationObject");
-       case CPP_TYPE_WARPED_SIMULATION:
-         return std::string("warped::Simulation");
-       case CPP_TYPE_CUSTOM_EVENT:
+      case CPP_TYPE_BOOST_TRIBOOL:
+         return std::string("boost::tribool");
+      case CPP_TYPE_CUSTOM_EVENT:
          return std::string(CUSTOM_EVENT_CLASS_NAME);
-       case CPP_TYPE_CUSTOM_BASE_CLASS:
+      case CPP_TYPE_CUSTOM_BASE_CLASS:
          return std::string(BASE_CLASS_NAME);
-       case CPP_TYPE_ELEMENT_STATE:
+      case CPP_TYPE_ELEMENT_STATE:
          return std::string("ElementState");
       case CPP_TYPE_INT:
          return std::string("int");
-      case CPP_TYPE_UNSIGNED_INT:
-         return std::string("unsigned int");
-      case CPP_TYPE_BOOST_TRIBOOL:
-         return std::string("boost::tribool");
       case CPP_TYPE_STD_STRING:
          return std::string("std::string");
+      case CPP_TYPE_UNSIGNED_INT:
+         return std::string("unsigned int");
+      case CPP_TYPE_VOID:
+         return std::string("void");
+      case CPP_TYPE_WARPED_EVENT:
+         return std::string("warped::Event");
+      case CPP_TYPE_WARPED_OBJECT_STATE:
+         return std::string("warped::ObjectState");
+      case CPP_TYPE_WARPED_SIMULATION:
+         return std::string("warped::Simulation");
+      case CPP_TYPE_WARPED_SIMULATION_OBJECT:
+         return std::string("warped::SimulationObject");
       default:
-          error("Unhandled type");
-          return std::string("");
+         error("cpp_type::tostring: Unhandled type");
+         return std::string("");
    }
 }
 
@@ -106,7 +106,7 @@ std::string cpp_type::get_string() const
          returnvalue += std::string("std::string");
          break;
       default:
-          error("Unhandled type");
+          error("cpp_type::get_string: Unhandled type");
    }
    if(isreference)
       returnvalue += "&";
@@ -138,23 +138,26 @@ void cpp_type::emit(std::ostream &of, int num) const
       switch (name_)
       {
          // handle only templates
+         case CPP_TYPE_CEREAL_BASE_CLASS:
+            of << "cereal::base_class<";
+            break;
+         case CPP_TYPE_NOTYPE:
+            // this is a special value to handle the hierarchy
+            break;
          case CPP_TYPE_SHARED_PTR:
             of << "std::shared_ptr<";
             break;
          case CPP_TYPE_STD_MAP:
             of << "std::map<";
             break;
-         case CPP_TYPE_STD_VECTOR:
-            of << "std::vector<";
-            break;
          case CPP_TYPE_STD_PAIR:
             of << "std::pair<";
             break;
-         case CPP_TYPE_NOTYPE:
-            // this is a special value to handle the hierarchy
+         case CPP_TYPE_STD_VECTOR:
+            of << "std::vector<";
             break;
          default:
-            error("Unhandled type");
+            error("cpp_type::emit: Unhandled type");
       }
       int sz = base_.size();
       for(std::list<cpp_type*>::const_iterator it = base_.begin(); it != base_.end(); ++it) {
