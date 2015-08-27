@@ -1,7 +1,7 @@
 /*
- *  VHDL code generation for processes.
+ *  C++ code generation for processes.
  *
- *  Copyright (C) 2008-2013  Nick Gasson (nick@nickg.me.uk)
+ *  Copyright (C) 2015 Michele Castellana (michele.castellana@mail.polimi.it)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,11 +21,30 @@
 #include "cpp_target.h"
 #include "cpp_element.hh"
 #include "state.hh"
+#include "hierarchy.hh"
 #include "cpp_syntax.hh"
 
 #include <iostream>
 #include <cassert>
 #include <sstream>
+
+/*
+ * TODO: always.
+ * WARNING: Right now it only supports "initial".
+ * Convert a Verilog process.
+ */
+static int generate_process(cppClass *theclass, ivl_process_t proc)
+{
+   set_active_class(theclass);
+
+   ivl_statement_t stmt = ivl_process_stmt(proc);
+   int rc = draw_stmt(stmt);
+   if (rc != 0)
+      return rc;
+
+   set_active_class(NULL);
+   return 0;
+}
 
 extern "C" int draw_process(ivl_process_t proc, void *)
 {
@@ -47,8 +66,8 @@ extern "C" int draw_process(ivl_process_t proc, void *)
       scope = ivl_scope_parent(scope);
 
    assert(ivl_scope_type(scope) == IVL_SCT_MODULE);
-   cppClass *ent = find_class(scope);
-   assert(ent != NULL);
+   cppClass *theclass = find_class(scope);
+   assert(theclass != NULL);
 
-   return 0;
+   return generate_process(theclass, proc);
 }

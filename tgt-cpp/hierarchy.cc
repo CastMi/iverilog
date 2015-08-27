@@ -30,7 +30,7 @@ void remember_hierarchy(cppClass* theclass)
 {
    submodule *temp = new submodule(theclass);
    for(std::list<submodule*>::iterator it = modules.begin();
-         it != modules.end() ; it++)
+         it != modules.end(); it++)
       if((*it)->relate_class->get_name() == theclass->get_name())
          assert(false);
    modules.push_front(temp);
@@ -38,6 +38,8 @@ void remember_hierarchy(cppClass* theclass)
 
 submodule* submodule::find(const cppClass* tofind)
 {
+   if(this->type != CPP_CLASS_MODULE)
+      return NULL;
    if(tofind->get_name() == relate_class->get_name())
       return this;
    if(hierarchy.empty())
@@ -46,16 +48,26 @@ submodule* submodule::find(const cppClass* tofind)
    for(std::list<submodule*>::iterator it = hierarchy.begin();
          it != hierarchy.end(); it++)
    {
-      if((*it)->type == CPP_CLASS_MODULE)
-      {
-         tmp = (*it)->find(tofind);
-         if(tmp != NULL)
-            return tmp;
-         assert(tmp == NULL);
-      }
+      tmp = (*it)->find(tofind);
+      if(tmp != NULL)
+         return tmp;
    }
    assert(tmp == NULL);
    return tmp;
+}
+
+submodule* find_submodule(cppClass* parent)
+{
+   submodule *found = NULL;
+   for(std::list<submodule*>::iterator it = modules.begin();
+         it != modules.end(); it++)
+   {
+      found = (*it)->find(parent);
+      if(found != NULL)
+         return found;
+   }
+   assert(found == NULL);
+   return found;
 }
 
 submodule* add_submodule_to(submodule* item, cppClass* parent)
@@ -91,14 +103,11 @@ submodule* add_submodule_to(submodule* item, cppClass* parent)
    for(std::list<submodule* >::iterator it = modules.begin();
          it != modules.end() ; it++)
    {
-      if((*it)->type == CPP_CLASS_MODULE)
+      submodule* found = (*it)->find(parent);
+      if(found != NULL)
       {
-         submodule* found = (*it)->find(parent);
-         if(found != NULL)
-         {
-            found->add_submodule(item);
-            return found;
-         }
+         found->add_submodule(item);
+         return found;
       }
    }
    assert(false);
@@ -107,7 +116,29 @@ submodule* add_submodule_to(submodule* item, cppClass* parent)
 
 void submodule::merge(submodule* el)
 {
+   if(el == this)
+      return;
    hierarchy.insert(hierarchy.end(), el->hierarchy.begin(), el->hierarchy.end());
+}
+
+void define_value(cppClass* theclass, const std::string signal, const boost::tribool value)
+{
+   assert(theclass != NULL);
+   assert(!signal.empty());
+   assert(!boost::indeterminate(value));
+   submodule* found = NULL;
+   for(std::list<submodule* >::iterator it = modules.begin();
+         it != modules.end() ; it++)
+   {
+      found = (*it)->find(theclass);
+      if(found != NULL)
+      {
+         break;
+      }
+   }
+   assert(found != NULL);
+   assert(found->relate_class == theclass);
+   found->value_map.push_front(std::pair<std::string, boost::tribool>(signal, value));
 }
 
 void submodule::insert_output(const std::string& str1, const std::string& str2)
@@ -179,6 +210,22 @@ static std::string recursive_build(submodule* current, std::string father_name,
    module_constr->add_param(new cpp_const_expr(my_name.c_str(), string_type));
    cpp_unaryop_expr* new_module = new cpp_unaryop_expr(CPP_UNARYOP_NEW, module_constr, port_pointer_type);
    list->push_back(new cpp_assign_stmt(unary, new_module));
+   // Set signal values for the current module
+   for(std::list<std::pair<std::string, boost::tribool> >::iterator signal = current->value_map.begin();
+         signal != current->value_map.end(); ++signal )
+   {
+      cpp_const_expr* current_signal = new cpp_const_expr((*signal).first.c_str(), string_type);
+      cpp_fcall_stmt* add_in_to_port = new cpp_fcall_stmt(no_type, expr_name, ADD_SIGNAL_FUN_NAME);
+      add_in_to_port->set_pointer_call();
+      add_in_to_port->add_param(current_signal);
+      cpp_const_expr* current_signal_value;
+      if((*signal).second)
+         current_signal_value = new cpp_const_expr("true", no_type);
+      else
+         current_signal_value = new cpp_const_expr("false", no_type);
+      add_in_to_port->add_param(current_signal_value);
+      list->push_back(add_in_to_port);
+   }
    // From now on, manage interconnections among my children.
    for(std::list<submodule*>::iterator it = current->hierarchy.begin();
          it != current->hierarchy.end(); it++)
@@ -219,7 +266,7 @@ static std::string recursive_build(submodule* current, std::string father_name,
          class_name_lhs = new cpp_const_expr(get_class_name((*it)->type).c_str(), no_type);
       }
       // From now on, I'm sure that I'm dealing with a gate
-      // Create the current submodule
+      // Create the gate
       cpp_unaryop_expr* sub_unary = new cpp_unaryop_expr(CPP_UNARYOP_DECL, sub_var_ref, port_pointer_type);
       cpp_fcall_stmt* port_constr = new cpp_fcall_stmt(no_type, class_name_lhs, "");
       port_constr->add_param(sub_string_name);
@@ -237,7 +284,7 @@ static std::string recursive_build(submodule* current, std::string father_name,
          add_in_to_port->set_pointer_call();
          add_in_to_port->add_param(supermod_signal);
          list->push_back(add_in_to_port);
-         // Add The input of the logic port to the outputs of the module
+         // Add the input of the logic port to the outputs of the father module
          cpp_fcall_stmt* add_out_to_module = new cpp_fcall_stmt(no_type, expr_name, ADD_OUTPUT_FUN_NAME);
          add_out_to_module->set_pointer_call();
          add_out_to_module->add_param(supermod_signal);
@@ -266,7 +313,7 @@ static std::string recursive_build(submodule* current, std::string father_name,
          add_out_to_port->add_param(new cpp_const_expr((*output_it).second.c_str(), string_type));
          list->push_back(add_out_to_port);
       }
-      // We have added input/output. Now, add the submodule
+      // We have added input/output. Now, add the gate itself
       cpp_fcall_stmt* push_port = new cpp_fcall_stmt(no_type, obj_pointers_literal, "push_back");
       push_port->add_param(sub_var_ref);
       list->push_back(push_port);
@@ -287,7 +334,7 @@ static std::string recursive_build(submodule* current, std::string father_name,
          add_out_to_module->add_param(supermod_signal);
          list->push_back(add_out_to_module);
       }
-   // Push the module
+   // Push the current module
    cpp_fcall_stmt* push_module = new cpp_fcall_stmt(no_type, obj_pointers_literal, "push_back");
    push_module->add_param(expr_name);
    list->push_back(push_module);

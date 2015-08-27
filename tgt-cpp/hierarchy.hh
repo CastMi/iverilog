@@ -26,10 +26,11 @@
 #include <utility>
 #include <iostream>
 #include <string>
+#include <boost/logic/tribool.hpp>
 
 struct submodule {
-   submodule(cpp_class_type thetype) : type(thetype), relate_class(NULL), hierarchy() {};
-   submodule(const cppClass* theclass) : type(CPP_CLASS_MODULE), relate_class(theclass) {};
+   submodule(cpp_class_type thetype) : type(thetype), relate_class(NULL), hierarchy(), value_map() {};
+   submodule(const cppClass* theclass) : type(CPP_CLASS_MODULE), relate_class(theclass), value_map() {};
 
    void insert_output(const std::string& str1, const std::string& str2);
    void insert_input(const std::string& str1, const std::string& str2);
@@ -52,10 +53,16 @@ struct submodule {
     * The size of this list must be 1 for logic gates.
     */
    std::list< std::pair< std::string, std::string > > outputs_map;
+   /*
+    *
+    */
+   std::list< std::pair<std::string, boost::tribool> > value_map;
 };
 
+void define_value(cppClass* theclass, const std::string str1, const boost::tribool value);
 void remember_hierarchy(cppClass* theclass);
 submodule* add_submodule_to(submodule* item, cppClass* parent);
+submodule* find_submodule(cppClass* parent);
 std::list<cpp_stmt*> build_hierarchy();
 
 #endif  // #ifndef INC_CPP_HIERARCHY_HH

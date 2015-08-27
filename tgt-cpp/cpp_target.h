@@ -5,7 +5,6 @@
 #include "cpp_config.h"
 #include "ivl_target.h"
 
-#include "support.hh"
 #include "cpp_syntax.hh"
 
 #include <string>
@@ -22,7 +21,7 @@ void draw_nexus(ivl_nexus_t nexus);
 cpp_var_ref *nexus_to_var_ref(cpp_scope *scope, ivl_nexus_t nexus);
 cpp_var_ref* readable_ref(cpp_scope* scope, ivl_nexus_t nex);
 string make_safe_name(ivl_signal_t sig);
-void require_support_function(support_function_t f);
 void draw_logic(cppClass *arch, ivl_net_logic_t log);
+int draw_stmt(ivl_statement_t stmt);
 
 #endif /* #ifndef INC_CPP_TARGET_H */

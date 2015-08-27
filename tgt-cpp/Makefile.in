@@ -46,7 +46,7 @@ CXXFLAGS = @WARNING_FLAGS@ @WARNING_FLAGS_CXX@ @CXXFLAGS@
 LDFLAGS = @LDFLAGS@
 
 O = cpp.o state.o cpp_element.o cpp_type.o cpp_syntax.o scope.o process.o \
-    support.o hierarchy.o logic.o
+    hierarchy.o stmt.o logic.o
 
 all: dep cpp.tgt cpp.conf cpp-s.conf
 

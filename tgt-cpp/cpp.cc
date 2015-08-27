@@ -95,13 +95,13 @@ extern "C" int target_design(ivl_design_t des)
    build_basic_classes();
    for (unsigned int i = 0; i < nroots; i++)
       draw_scope(roots[i], NULL);
-   build_net();
 
    // Only generate processes if there were no errors generating entities
    // (otherwise the necessary information won't be present)
    if (0 == g_errors)
       ivl_design_process(des, draw_process, NULL);
 
+   build_net();
    // Write the generated elements to the output file
    // only if there were no errors generating entities or processes
    if (0 == g_errors) {
