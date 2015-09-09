@@ -253,6 +253,16 @@ void cpp_expr_list::emit(std::ostream &of, int level) const
    scope_.set_parent(find_class(BASE_CLASS_NAME)->get_scope());
    switch(type_)
    {
+      case CPP_CLASS_OR:
+         {
+            name_ = "Or";
+            cpp_function* constr = new cpp_function(name_.c_str(), new cpp_type(CPP_TYPE_NOTYPE));
+            constr->set_constructor();
+            constr->set_comment(name_ + " constructor");
+            add_function(constr);
+            implement_simulation_functions();
+         }
+         break;
       case CPP_CLASS_AND:
          {
             name_ = "And";
@@ -451,6 +461,7 @@ void cppClass::implement_simulation_functions()
    }
    // Add the init list to the constructor
    cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
+   cpp_type* boolean_type = new cpp_type(CPP_TYPE_BOOL);
    const_ref_string_type->set_const();
    const_ref_string_type->set_reference();
    cpp_function* constr = get_costructor();
@@ -504,7 +515,7 @@ void cppClass::implement_simulation_functions()
    cpp_var* output_var = get_var(HIERARCHY_VAR_NAME);
    assert(output_var);
    // Add an assert(I know the signal)
-   cpp_binop_expr * signal_known = new cpp_binop_expr(CPP_BINOP_NEQ, local_event->get_type());
+   cpp_binop_expr * signal_known = new cpp_binop_expr(CPP_BINOP_NEQ, boolean_type);
    cpp_fcall_stmt* find = new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "find");
    cpp_fcall_stmt * new_signal = new cpp_fcall_stmt(string_type, local_event->get_ref(), SIGNAL_NAME_GETTER_FUN_NAME);
    find->add_param(new_signal);
@@ -528,114 +539,8 @@ void cppClass::implement_simulation_functions()
    switch(type_)
    {
       case CPP_CLASS_AND:
-         {
-            // Create the cycle to scan the inputs in order to determine the output
-            cpp_type* iterator_type = new cpp_type(*(inputvar->get_type()));
-            iterator_type->set_iterator();
-            cpp_var* iterator = new cpp_var ("it", iterator_type);
-            cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "begin"));
-            cpp_for * output_for = new cpp_for();
-            output_for->add_precycle(precycle);
-            cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, iterator_type);
-            cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
-            cond->add_expr(new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "end"));
-            output_for->set_condition(cond);
-            output_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
-            // Create the if to handle a false value on an input
-            cpp_binop_expr * cond_false = new cpp_binop_expr(CPP_BINOP_EQ, local_event->get_type());
-            cpp_unaryop_expr* it_deref = new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), inputvar->get_type());
-            cpp_fcall_stmt * thesignal = new cpp_fcall_stmt(string_type, it_deref, "second");
-            thesignal->set_member_access();
-            cond_false->add_expr_front(thesignal);
-            cpp_const_expr* false_expr = new cpp_const_expr("false", CPP_TYPE_NOTYPE);
-            cond_false->add_expr(false_expr);
-            cpp_fcall_stmt* begin_fun = new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "begin");
-            cpp_fcall_stmt* deref = new cpp_fcall_stmt(const_ref_string_type, begin_fun, "first");
-            deref->set_pointer_call();
-            deref->set_member_access();
-            cpp_fcall_stmt* get_el = new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "at");
-            get_el->add_param(deref);
-            cpp_assign_stmt* false_assign = new cpp_assign_stmt(get_el, false_expr);
-            cpp_if * false_if = new cpp_if(cond_false);
-            false_if->add_to_body(false_assign);
-            false_if->add_to_body(new cpp_break());
-            output_for->add_to_body(false_if);
-            // Create the if to handle an indeterminate value on an input
-            cpp_const_expr * boost_const = new cpp_const_expr("boost::indeterminate", no_type);
-            cpp_fcall_stmt* indeter_expr = new cpp_fcall_stmt(no_type, boost_const, "");
-            indeter_expr->add_param(thesignal);
-            cpp_if *indeter_if = new cpp_if(indeter_expr);
-            cpp_assign_stmt* indeter_assign = new cpp_assign_stmt(get_el, boost_const);
-            indeter_if->add_to_body(indeter_assign);
-            output_for->add_to_body(indeter_if);
-            // Create/Add the default value before the for
-            cpp_assign_stmt* assign_default = new cpp_assign_stmt(get_el, new cpp_const_expr("true", CPP_TYPE_NOTYPE));
-            event_handler->add_stmt(assign_default);
-            init_fun->add_stmt(assign_default);
-            // Add the for to the functions
-            event_handler->add_stmt(output_for);
-            init_fun->add_stmt(output_for);
-            /*
-             * Add the cycle that will create the events
-             */
-            // Create the for.
-            iterator = new cpp_var ("it", list_iterator_type);
-            cpp_fcall_stmt* at_fun = new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "begin");
-            cpp_fcall_stmt* to_vector = new cpp_fcall_stmt(string_type, at_fun, "second");
-            to_vector->set_pointer_call();
-            to_vector->set_member_access();
-            precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(at_fun->get_type(), to_vector, "begin"));
-            cpp_for * push_event_for_handler = new cpp_for();
-            push_event_for_handler->add_precycle(precycle);
-            cond = new cpp_binop_expr(CPP_BINOP_NEQ, no_type);
-            cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
-            cond->add_expr(new cpp_fcall_stmt(at_fun->get_type(), to_vector, "end"));
-            push_event_for_handler->set_condition(cond);
-            push_event_for_handler->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
-            cpp_for * push_event_for_init = new cpp_for(*push_event_for_handler);
-            // Start creating stuff to instantiate the new event
-            cpp_fcall_stmt* receiver_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()), "first");
-            receiver_name->set_member_access();
-            cpp_fcall_stmt* signal_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()), "second");
-            signal_name->set_member_access();
-            cpp_const_expr* event_name = new cpp_const_expr(cpp_type::tostring(CPP_TYPE_CUSTOM_EVENT).c_str(), no_type);
-            cpp_fcall_stmt* new_event_fcall_handler = new cpp_fcall_stmt(no_type, event_name, "");
-            cpp_fcall_stmt* new_event_fcall_init = new cpp_fcall_stmt(no_type, event_name, "");
-            cpp_unaryop_expr* new_event_handler = new cpp_unaryop_expr(CPP_UNARYOP_NEW, new_event_fcall_handler, local_event_type);
-            cpp_unaryop_expr* new_event_init = new cpp_unaryop_expr(CPP_UNARYOP_NEW, new_event_fcall_init, local_event_type);
-            cpp_fcall_stmt* is_indeter = new cpp_fcall_stmt(no_type, boost_const, "");
-            is_indeter->add_param(get_el);
-            cpp_unaryop_expr * not_is_indeter = new cpp_unaryop_expr(CPP_UNARYOP_NOT, is_indeter, is_indeter->get_type());
-            // Create the instruction that push back the new events
-            cpp_fcall_stmt* add_event_handler = new cpp_fcall_stmt(response_event->get_type(), response_event->get_ref(), "emplace_back");
-            cpp_fcall_stmt* add_event_init = new cpp_fcall_stmt(response_event->get_type(), response_event->get_ref(), "emplace_back");
-            // Create the if that will contain the for
-            cpp_if *if_not_indeter_handler = new cpp_if(not_is_indeter);
-            cpp_if *if_not_indeter_init = new cpp_if(*if_not_indeter_handler);
-            if_not_indeter_init->add_to_body(push_event_for_init);
-            if_not_indeter_handler->add_to_body(push_event_for_handler);
-            new_event_fcall_handler->add_param(receiver_name);
-            cpp_binop_expr * sum_timestamp = new cpp_binop_expr(CPP_BINOP_ADD, no_type);
-            sum_timestamp->add_expr(new cpp_fcall_stmt(new cpp_type(CPP_TYPE_UNSIGNED_INT), local_event->get_ref(), WARPED_TIMESTAMP_FUN_NAME));
-            sum_timestamp->add_expr(new cpp_const_expr("3", new cpp_type(CPP_TYPE_UNSIGNED_INT)));
-            new_event_fcall_handler->add_param(sum_timestamp);
-            new_event_fcall_handler->add_param(new_value_fcall);
-            new_event_fcall_handler->add_param(signal_name);
-            new_event_fcall_init->add_param(receiver_name);
-            new_event_fcall_init->add_param(new cpp_const_expr("0", new cpp_type(CPP_TYPE_UNSIGNED_INT)));
-            new_event_fcall_init->add_param(get_el);
-            new_event_fcall_init->add_param(signal_name);
-            add_event_handler->add_param(new_event_handler);
-            add_event_init->add_param(new_event_init);
-            push_event_for_handler->add_to_body(add_event_handler);
-            push_event_for_init->add_to_body(add_event_init);
-            event_handler->add_stmt(if_not_indeter_handler);
-            init_fun->add_stmt(if_not_indeter_init);
-            // Add the return statements
-            cpp_unaryop_expr* return_stmt = new cpp_unaryop_expr(CPP_UNARYOP_RETURN, response_event->get_ref(), response_event->get_type());
-            init_fun->add_stmt(return_stmt);
-            event_handler->add_stmt(return_stmt);
-         }
+      case CPP_CLASS_OR:
+         implement_gate();
          return;
       case CPP_CLASS_MODULE:
          {
@@ -644,18 +549,17 @@ void cppClass::implement_simulation_functions()
             iterator_type->set_iterator();
             cpp_var* ext_iterator = new cpp_var ("ext_it", iterator_type);
             cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, ext_iterator->get_ref(), ext_iterator->get_type()), new cpp_fcall_stmt(ext_iterator->get_type(), inputvar->get_ref(), "begin"));
-            cpp_for * ext_for = new cpp_for();
-            ext_for->add_precycle(precycle);
-            cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, iterator_type);
+            cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, boolean_type);
             cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, ext_iterator->get_ref(), ext_iterator->get_type()));
             cond->add_expr(new cpp_fcall_stmt(ext_iterator->get_type(), inputvar->get_ref(), "end"));
-            ext_for->set_condition(cond);
+            cpp_for * ext_for = new cpp_for(cond);
+            ext_for->add_precycle(precycle);
             ext_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, ext_iterator->get_ref(), ext_iterator->get_type()));
             // Create the if to determine if the current signal has an indeterminate value
             cpp_fcall_stmt* indeter_expr = new cpp_fcall_stmt(no_type, new cpp_const_expr("boost::indeterminate", no_type), "");
-            cpp_binop_expr * cond_indeter = new cpp_binop_expr(CPP_BINOP_AND, local_event->get_type());
+            cpp_binop_expr * cond_indeter = new cpp_binop_expr(CPP_BINOP_AND, boolean_type);
             cpp_unaryop_expr * first_cond = new cpp_unaryop_expr(CPP_UNARYOP_NOT, indeter_expr, local_event->get_type());
-            cpp_binop_expr * second_cond = new cpp_binop_expr(CPP_BINOP_NEQ, local_event->get_type());
+            cpp_binop_expr * second_cond = new cpp_binop_expr(CPP_BINOP_NEQ, boolean_type);
             cpp_fcall_stmt* find_el = new cpp_fcall_stmt(output_var->get_type(), output_var->get_ref(), "find");
             cpp_fcall_stmt* cur_sig_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, ext_iterator->get_ref(), ext_iterator->get_type()), "first");
             cur_sig_name->set_member_access();
@@ -671,17 +575,16 @@ void cppClass::implement_simulation_functions()
             // Create the internal for to alert averyone interested in that signal
             cpp_type* int_iterator_type = new cpp_type(*(output_var->get_type()));
             cpp_var* int_iterator = new cpp_var ("int_it", list_iterator_type);
-            cpp_for* int_for = new cpp_for();
             cpp_fcall_stmt* signal_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, ext_iterator->get_ref(), ext_iterator->get_type()), "first");
             signal_name->set_member_access();
             cpp_fcall_stmt* at_fun = new cpp_fcall_stmt(int_iterator->get_type(), output_var->get_ref(), "at");
             at_fun->add_param(signal_name);
             cpp_assign_stmt* ext_precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, int_iterator->get_ref(), int_iterator_type), new cpp_fcall_stmt(int_iterator_type, at_fun, "begin"));
-            int_for->add_precycle(ext_precycle);
-            cpp_binop_expr* ext_cond = new cpp_binop_expr(CPP_BINOP_NEQ, int_iterator_type);
+            cpp_binop_expr* ext_cond = new cpp_binop_expr(CPP_BINOP_NEQ, boolean_type);
             ext_cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, int_iterator->get_ref(), int_iterator->get_type()));
             ext_cond->add_expr(new cpp_fcall_stmt(int_iterator_type, at_fun, "end"));
-            int_for->set_condition(ext_cond);
+            cpp_for* int_for = new cpp_for(ext_cond);
+            int_for->add_precycle(ext_precycle);
             int_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, int_iterator->get_ref(), int_iterator->get_type()));
             // Create the events
             cpp_fcall_stmt* add_event = new cpp_fcall_stmt(response_event->get_type(), response_event->get_ref(), "emplace_back");
@@ -706,7 +609,7 @@ void cppClass::implement_simulation_functions()
       default:
          break;
    }
-   cpp_binop_expr * second_cond = new cpp_binop_expr(CPP_BINOP_NEQ, no_type);
+   cpp_binop_expr * second_cond = new cpp_binop_expr(CPP_BINOP_NEQ, boolean_type);
    cpp_fcall_stmt* find_el = new cpp_fcall_stmt(output_var->get_type(), output_var->get_ref(), "find");
    find_el->add_param(new_signal);
    second_cond->add_expr(find_el);
@@ -717,12 +620,11 @@ void cppClass::implement_simulation_functions()
    cpp_fcall_stmt* at_fun = new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "at");
    at_fun->add_param(new_signal);
    cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(at_fun->get_type(), at_fun, "begin"));
-   cpp_for * push_event_for = new cpp_for();
-   push_event_for->add_precycle(precycle);
-   cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, no_type);
+   cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, boolean_type);
    cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
    cond->add_expr(new cpp_fcall_stmt(at_fun->get_type(), at_fun, "end"));
-   push_event_for->set_condition(cond);
+   cpp_for * push_event_for = new cpp_for(cond);
+   push_event_for->add_precycle(precycle);
    push_event_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
    cpp_fcall_stmt* add_event = new cpp_fcall_stmt(response_event->get_type(), response_event->get_ref(), "emplace_back");
    cpp_fcall_stmt* receiver_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()), "first");
@@ -748,6 +650,165 @@ void cppClass::implement_simulation_functions()
    init_fun->add_stmt(return_stmt);
    event_handler->add_stmt(return_stmt);
 }
+
+void cppClass::implement_gate()
+{
+   // Retrieve all the vars and funs I need
+   cpp_var* inputvar = get_var(INPUT_VAR_NAME);
+   assert(inputvar);
+   cpp_var* output_var = get_var(HIERARCHY_VAR_NAME);
+   assert(output_var);
+   cpp_type *local_event_type = new cpp_type(CPP_TYPE_CUSTOM_EVENT);
+   cpp_var *local_event = new cpp_var(CASTED_EVENT_VAR_NAME, local_event_type);
+   cpp_type* string_type = new cpp_type(CPP_TYPE_STD_STRING);
+   cpp_type* boolean_type = new cpp_type(CPP_TYPE_BOOL);
+   cpp_type* const_ref_string_type = new cpp_type(CPP_TYPE_STD_STRING);
+   cpp_type* no_type = new cpp_type(CPP_TYPE_NOTYPE);
+   cpp_function *event_handler = get_function(WARPED_HANDLE_EVENT_FUN_NAME);
+   assert(event_handler);
+   cpp_function *init_fun = get_function(WARPED_INIT_EVENT_FUN_NAME);
+   cpp_type* output_pair = new cpp_type(CPP_TYPE_STD_PAIR, string_type);
+   output_pair->add_type(string_type);
+   cpp_type* list_iterator_type = new cpp_type(CPP_TYPE_STD_VECTOR, output_pair);
+   list_iterator_type->set_iterator();
+   cpp_var *response_event = event_handler->get_var(RETURN_EVENT_LIST_VAR_NAME);
+   assert(response_event);
+   cpp_fcall_stmt* new_value_fcall = new cpp_fcall_stmt(new cpp_type(CPP_TYPE_BOOST_TRIBOOL), local_event->get_ref(), NEW_VALUE_GETTER_FUN_NAME);
+   // Add an assert(only one output)
+   cpp_binop_expr * eq_to_one = new cpp_binop_expr(CPP_BINOP_EQ, boolean_type);
+   cpp_fcall_stmt* size_call = new cpp_fcall_stmt(output_var->get_type(), output_var->get_ref(), "size");
+   eq_to_one->add_expr(size_call);
+   eq_to_one->add_expr(new cpp_const_expr("1", new cpp_type(CPP_TYPE_UNSIGNED_INT)));
+   init_fun->add_stmt(new cpp_assert(eq_to_one));
+   // Create the cycle to scan the inputs in order to determine the output
+   cpp_type* iterator_type = new cpp_type(*(inputvar->get_type()));
+   iterator_type->set_iterator();
+   cpp_var* iterator = new cpp_var ("it", iterator_type);
+   cpp_assign_stmt* precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "begin"));
+   cpp_binop_expr * cond = new cpp_binop_expr(CPP_BINOP_NEQ, boolean_type);
+   cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
+   cond->add_expr(new cpp_fcall_stmt(iterator->get_type(), inputvar->get_ref(), "end"));
+   cpp_for * output_for = new cpp_for(cond);
+   output_for->add_precycle(precycle);
+   output_for->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
+   // Create the if to handle a false value on an input
+   cpp_binop_expr * cond_gate_dep = new cpp_binop_expr(CPP_BINOP_EQ, boolean_type);
+   cpp_unaryop_expr* it_deref = new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), inputvar->get_type());
+   cpp_fcall_stmt * thesignal = new cpp_fcall_stmt(string_type, it_deref, "second");
+   thesignal->set_member_access();
+   cond_gate_dep->add_expr_front(thesignal);
+   cpp_const_expr* gate_dep_expr = new cpp_const_expr("false", CPP_TYPE_NOTYPE);
+   // Create/Add the output default value before
+   switch(type_)
+   {
+      case CPP_CLASS_AND:
+         gate_dep_expr = new cpp_const_expr("false", CPP_TYPE_NOTYPE);
+         break;
+      case CPP_CLASS_OR:
+         gate_dep_expr = new cpp_const_expr("true", CPP_TYPE_NOTYPE);
+         break;
+      default:
+         assert(false);
+   }
+   cond_gate_dep->add_expr(gate_dep_expr);
+   cpp_fcall_stmt* begin_fun = new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "begin");
+   cpp_fcall_stmt* deref = new cpp_fcall_stmt(const_ref_string_type, begin_fun, "first");
+   deref->set_pointer_call();
+   deref->set_member_access();
+   cpp_fcall_stmt* get_el = new cpp_fcall_stmt(inputvar->get_type(), inputvar->get_ref(), "at");
+   get_el->add_param(deref);
+   cpp_assign_stmt* false_assign = new cpp_assign_stmt(get_el, gate_dep_expr);
+   cpp_if * false_if = new cpp_if(cond_gate_dep);
+   false_if->add_to_body(false_assign);
+   false_if->add_to_body(new cpp_break());
+   output_for->add_to_body(false_if);
+   // Create the if to handle an indeterminate value on an input
+   cpp_const_expr * boost_const = new cpp_const_expr("boost::indeterminate", no_type);
+   cpp_fcall_stmt* indeter_expr = new cpp_fcall_stmt(boolean_type, boost_const, "");
+   indeter_expr->add_param(thesignal);
+   cpp_if *indeter_if = new cpp_if(indeter_expr);
+   cpp_assign_stmt* indeter_assign = new cpp_assign_stmt(get_el, boost_const);
+   indeter_if->add_to_body(indeter_assign);
+   output_for->add_to_body(indeter_if);
+   cpp_assign_stmt* assign_default;
+   // Create/Add the output default value before
+   switch(type_)
+   {
+      case CPP_CLASS_AND:
+         assign_default = new cpp_assign_stmt(get_el, new cpp_const_expr("true", CPP_TYPE_NOTYPE));
+         break;
+      case CPP_CLASS_OR:
+         assign_default = new cpp_assign_stmt(get_el, new cpp_const_expr("false", CPP_TYPE_NOTYPE));
+         break;
+      default:
+         assert(false);
+   }
+   event_handler->add_stmt(assign_default);
+   init_fun->add_stmt(assign_default);
+   // Add the for to the functions
+   event_handler->add_stmt(output_for);
+   init_fun->add_stmt(output_for);
+   /*
+    * Add the cycle that will create the events
+    */
+   // Create the for.
+   iterator = new cpp_var ("it", list_iterator_type);
+   cpp_fcall_stmt* at_fun = new cpp_fcall_stmt(iterator->get_type(), output_var->get_ref(), "begin");
+   cpp_fcall_stmt* to_vector = new cpp_fcall_stmt(string_type, at_fun, "second");
+   to_vector->set_pointer_call();
+   to_vector->set_member_access();
+   precycle = new cpp_assign_stmt(new cpp_unaryop_expr(CPP_UNARYOP_DECL, iterator->get_ref(), iterator->get_type()), new cpp_fcall_stmt(at_fun->get_type(), to_vector, "begin"));
+   cond = new cpp_binop_expr(CPP_BINOP_NEQ, boolean_type);
+   cond->add_expr(new cpp_unaryop_expr(CPP_UNARYOP_LITERAL, iterator->get_ref(), iterator->get_type()));
+   cond->add_expr(new cpp_fcall_stmt(at_fun->get_type(), to_vector, "end"));
+   cpp_for * push_event_for_handler = new cpp_for(cond);
+   push_event_for_handler->add_precycle(precycle);
+   push_event_for_handler->add_postcycle(new cpp_unaryop_expr(CPP_UNARYOP_ADD, iterator->get_ref(), iterator->get_type()));
+   cpp_for * push_event_for_init = new cpp_for(*push_event_for_handler);
+   // Start creating stuff to instantiate the new event
+   cpp_fcall_stmt* receiver_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()), "first");
+   receiver_name->set_member_access();
+   cpp_fcall_stmt* signal_name = new cpp_fcall_stmt(string_type, new cpp_unaryop_expr(CPP_UNARYOP_DEREF, iterator->get_ref(), iterator->get_type()), "second");
+   signal_name->set_member_access();
+   cpp_const_expr* event_name = new cpp_const_expr(cpp_type::tostring(CPP_TYPE_CUSTOM_EVENT).c_str(), no_type);
+   cpp_fcall_stmt* new_event_fcall_handler = new cpp_fcall_stmt(no_type, event_name, "");
+   cpp_fcall_stmt* new_event_fcall_init = new cpp_fcall_stmt(no_type, event_name, "");
+   cpp_unaryop_expr* new_event_handler = new cpp_unaryop_expr(CPP_UNARYOP_NEW, new_event_fcall_handler, local_event_type);
+   cpp_unaryop_expr* new_event_init = new cpp_unaryop_expr(CPP_UNARYOP_NEW, new_event_fcall_init, local_event_type);
+   cpp_fcall_stmt* is_indeter = new cpp_fcall_stmt(boolean_type, boost_const, "");
+   is_indeter->add_param(get_el);
+   cpp_unaryop_expr * not_is_indeter = new cpp_unaryop_expr(CPP_UNARYOP_NOT, is_indeter, is_indeter->get_type());
+   // Create the instruction that push back the new events
+   cpp_fcall_stmt* add_event_handler = new cpp_fcall_stmt(response_event->get_type(), response_event->get_ref(), "emplace_back");
+   cpp_fcall_stmt* add_event_init = new cpp_fcall_stmt(response_event->get_type(), response_event->get_ref(), "emplace_back");
+   // Create the if that will contain the for
+   cpp_if *if_not_indeter_handler = new cpp_if(not_is_indeter);
+   cpp_if *if_not_indeter_init = new cpp_if(*if_not_indeter_handler);
+   if_not_indeter_init->add_to_body(push_event_for_init);
+   if_not_indeter_handler->add_to_body(push_event_for_handler);
+   new_event_fcall_handler->add_param(receiver_name);
+   cpp_binop_expr * sum_timestamp = new cpp_binop_expr(CPP_BINOP_ADD, no_type);
+   sum_timestamp->add_expr(new cpp_fcall_stmt(new cpp_type(CPP_TYPE_UNSIGNED_INT), local_event->get_ref(), WARPED_TIMESTAMP_FUN_NAME));
+   sum_timestamp->add_expr(new cpp_const_expr("3", new cpp_type(CPP_TYPE_UNSIGNED_INT)));
+   new_event_fcall_handler->add_param(sum_timestamp);
+   new_event_fcall_handler->add_param(new_value_fcall);
+   new_event_fcall_handler->add_param(signal_name);
+   new_event_fcall_init->add_param(receiver_name);
+   new_event_fcall_init->add_param(new cpp_const_expr("0", new cpp_type(CPP_TYPE_UNSIGNED_INT)));
+   new_event_fcall_init->add_param(get_el);
+   new_event_fcall_init->add_param(signal_name);
+   add_event_handler->add_param(new_event_handler);
+   add_event_init->add_param(new_event_init);
+   push_event_for_handler->add_to_body(add_event_handler);
+   push_event_for_init->add_to_body(add_event_init);
+   event_handler->add_stmt(if_not_indeter_handler);
+   init_fun->add_stmt(if_not_indeter_init);
+   // Add the return statements
+   cpp_unaryop_expr* return_stmt = new cpp_unaryop_expr(CPP_UNARYOP_RETURN, response_event->get_ref(), response_event->get_type());
+   init_fun->add_stmt(return_stmt);
+   event_handler->add_stmt(return_stmt);
+}
+
 
 cpp_var* cppClass::get_var(const std::string &name) const
 {
@@ -777,11 +838,6 @@ void cpp_context::emit_after_classes(std::ostream &of, int level) const
    newline(of, level);
    of << "}; ";
 }
-
-void cpp_conditional::set_condition(cpp_expr* p) {
-   assert(!condition_);
-   condition_ = p;
-};
 
 void cpp_if::emit(std::ostream &of, int level) const
 {
@@ -1037,9 +1093,13 @@ cpp_var_ref* cpp_var::get_ref()
 
 void cpp_assert::emit(std::ostream &of, int level) const
 {
+   // expr_ == NULL means assert(false)
    of << "assert(";
-   if(expr_ != NULL)
+   if(expr_ != NULL){
+      assert(expr_->get_type()->get_name() == CPP_TYPE_INT ||
+            expr_->get_type()->get_name() == CPP_TYPE_BOOL);
       expr_->emit(of, level);
+      }
    else
       of << "false";
    of << ")";

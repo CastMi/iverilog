@@ -25,6 +25,7 @@
 #include <cassert>
 
 enum cpp_type_name_t {
+   CPP_TYPE_BOOL,
    CPP_TYPE_BOOST_TRIBOOL,
    CPP_TYPE_CUSTOM_EVENT,
    CPP_TYPE_CUSTOM_BASE_CLASS,

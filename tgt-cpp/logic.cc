@@ -57,23 +57,24 @@ static void inputs_to_expr(cppClass *theclass, cpp_class_type type,
 void translate_logic(cppClass *theclass, ivl_net_logic_t log)
 {
    switch (ivl_logic_type(log)) {
-   case IVL_LO_AND:
    case IVL_LO_OR:
+      inputs_to_expr(theclass, CPP_CLASS_OR, log);
+      return;
+   case IVL_LO_AND:
+      inputs_to_expr(theclass, CPP_CLASS_AND, log);
+      return;
    case IVL_LO_NAND:
    case IVL_LO_NOR:
    case IVL_LO_XOR:
    case IVL_LO_XNOR:
    case IVL_LO_NOT:
-      // FIXME: right now they are all translated as AND
-      inputs_to_expr(theclass, CPP_CLASS_AND, log);
-      return;
    case IVL_LO_PULLUP:
    case IVL_LO_PULLDOWN:
    case IVL_LO_BUF:
    case IVL_LO_BUFT:
    case IVL_LO_BUFZ:
    default:
-      error("Don't know how to translate type %d to expression",
+      error("The expression %d is not supported yet",
             ivl_logic_type(log));
       return;
    }
@@ -88,7 +89,7 @@ void draw_logic(cppClass *theclass, ivl_net_logic_t log)
    case IVL_LO_NOTIF1:
    case IVL_LO_UDP:
       {
-         error("Don't know how to translate logic type = %d to expression",
+         error("The expression %d is not supported yet",
                ivl_logic_type(log));
       }
    default:

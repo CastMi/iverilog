@@ -154,6 +154,7 @@ void submodule::insert_input(const std::string& str1, const std::string& str2)
 }
 
 static unsigned int andPort(0);
+static unsigned int orPort(0);
 static unsigned int modulenum(0);
 
 static std::string get_unique_name(cpp_class_type type)
@@ -162,6 +163,9 @@ static std::string get_unique_name(cpp_class_type type)
 
    switch(type)
    {
+      case CPP_CLASS_OR:
+         ss << "orPort" << orPort++;
+         break;
       case CPP_CLASS_AND:
          ss << "andPort" << andPort++;
          break;
@@ -180,6 +184,9 @@ static std::string get_class_name(cpp_class_type type)
 
    switch(type)
    {
+      case CPP_CLASS_OR:
+         ss << "Or";
+         break;
       case CPP_CLASS_AND:
          ss << "And";
          break;

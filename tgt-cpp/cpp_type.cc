@@ -29,6 +29,8 @@ std::string cpp_type::tostring(const cpp_type_name_t type)
 {
    switch(type)
    {
+      case CPP_TYPE_BOOL:
+         return std::string("bool");
       case CPP_TYPE_BOOST_TRIBOOL:
          return std::string("boost::tribool");
       case CPP_TYPE_CUSTOM_EVENT:
@@ -69,44 +71,47 @@ std::string cpp_type::get_string() const
       returnvalue += "const ";
    switch (name_)
    {
-       case CPP_TYPE_WARPED_EVENT:
-         returnvalue += "warped::Event";
+      case CPP_TYPE_BOOL:
+         returnvalue += std::string("bool");
          break;
-       case CPP_TYPE_VOID:
-         returnvalue += "void";
+      case CPP_TYPE_BOOST_TRIBOOL:
+         returnvalue += std::string("boost::tribool");
          break;
-       case CPP_TYPE_WARPED_OBJECT_STATE:
-         returnvalue += "warped::ObjectState";
-         break;
-       case CPP_TYPE_WARPED_SIMULATION:
-         returnvalue += "warped::Simulation";
-         break;
-       case CPP_TYPE_CUSTOM_EVENT:
-         returnvalue += CUSTOM_EVENT_CLASS_NAME;
-         break;
-       case CPP_TYPE_CUSTOM_BASE_CLASS:
+      case CPP_TYPE_CUSTOM_BASE_CLASS:
          returnvalue += BASE_CLASS_NAME;
          break;
-       case CPP_TYPE_WARPED_SIMULATION_OBJECT:
-         returnvalue += "warped::SimulationObject";
+      case CPP_TYPE_CUSTOM_EVENT:
+         returnvalue += CUSTOM_EVENT_CLASS_NAME;
          break;
-       case CPP_TYPE_ELEMENT_STATE:
+      case CPP_TYPE_ELEMENT_STATE:
          returnvalue += "ElementState";
          break;
       case CPP_TYPE_INT:
          returnvalue += std::string("int");
          break;
-      case CPP_TYPE_UNSIGNED_INT:
-         returnvalue += std::string("unsigned int");
-         break;
-      case CPP_TYPE_BOOST_TRIBOOL:
-         returnvalue += std::string("boost::tribool");
-         break;
       case CPP_TYPE_STD_STRING:
          returnvalue += std::string("std::string");
          break;
+      case CPP_TYPE_UNSIGNED_INT:
+         returnvalue += std::string("unsigned int");
+         break;
+      case CPP_TYPE_VOID:
+         returnvalue += "void";
+         break;
+      case CPP_TYPE_WARPED_EVENT:
+         returnvalue += "warped::Event";
+         break;
+      case CPP_TYPE_WARPED_OBJECT_STATE:
+         returnvalue += "warped::ObjectState";
+         break;
+      case CPP_TYPE_WARPED_SIMULATION:
+         returnvalue += "warped::Simulation";
+         break;
+      case CPP_TYPE_WARPED_SIMULATION_OBJECT:
+         returnvalue += "warped::SimulationObject";
+         break;
       default:
-          error("cpp_type::get_string: Unhandled type");
+         error("cpp_type::get_string: Unhandled type");
    }
    if(isreference)
       returnvalue += "&";

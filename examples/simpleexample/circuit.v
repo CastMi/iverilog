@@ -14,7 +14,6 @@ n = 1;
 o = 1;
 
 end
-
 endmodule
 
 module mysubmod (w, d, q);

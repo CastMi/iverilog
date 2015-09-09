@@ -190,6 +190,7 @@ private:
  */
 class cpp_assert : public cpp_stmt {
 public:
+   // expr_ == NULL means assert(false)
    cpp_assert() : expr_(NULL) {}
    cpp_assert(cpp_expr* expr) : expr_(expr) {}
    ~cpp_assert() {};
@@ -315,16 +316,15 @@ protected:
  */
 class cpp_conditional : public cpp_stmt {
 public:
-   cpp_conditional(cpp_expr* condition) : condition_(condition) {};
+   cpp_conditional(cpp_expr* condition) : condition_(condition) {
+      assert(condition_->get_type()->get_name() == CPP_TYPE_INT ||
+            condition_->get_type()->get_name() == CPP_TYPE_BOOL);
+   };
    cpp_conditional() : condition_(NULL) {};
    ~cpp_conditional() {};
 
-   void add_to_body(cpp_stmt* item) { statements_.push_back(item); };
-   void set_condition(cpp_expr* p);
-
 protected:
    cpp_expr* condition_;
-   std::list<cpp_stmt*> statements_;
 };
 
 /*
@@ -338,9 +338,11 @@ public:
 
    virtual void emit(std::ostream &of, int level = 0) const;
    void add_to_else_body(cpp_stmt* item) { else_statements_.push_back(item); };
+   void add_to_body(cpp_stmt* item) { statements_.push_back(item); };
 
 protected:
    std::list<cpp_stmt*> else_statements_;
+   std::list<cpp_stmt*> statements_;
 };
 
 /*
@@ -355,8 +357,10 @@ public:
    virtual void emit(std::ostream &of, int level = 0) const;
    void add_precycle(cpp_expr* p) { precycle_.push_back(p); }
    void add_postcycle(cpp_expr* p) { postcycle_.push_back(p); }
+   void add_to_body(cpp_stmt* item) { statements_.push_back(item); };
 
 private:
+   std::list<cpp_stmt*> statements_;
    std::list<cpp_expr*> precycle_;
    std::list<cpp_expr*> postcycle_;
 };
@@ -499,6 +503,7 @@ public:
 
 private:
    inline void add_simulation_functions();
+   inline void implement_gate();
    inline void implement_simulation_functions();
    inline void add_event_functions();
 
